@@ -81,8 +81,9 @@ public class StreamingViewer extends JFrame {
         frameCount = 0;
         lastFpsUpdate = System.currentTimeMillis();
         
-        // Start streaming at 640x480 (scaled up for display)
-        boolean started = screen.startStream(0, 0, 640, 480);
+        // Start streaming at full screen resolution (2880x1920 on Surface Pro)
+        // Note: If region capture fails, it falls back to this resolution anyway
+        boolean started = screen.startStream(0, 0, 2880, 1920);
         if (!started) {
             JOptionPane.showMessageDialog(this, 
                 "Failed to start stream. Check console for details.",
@@ -178,8 +179,8 @@ public class StreamingViewer extends JFrame {
     // Custom panel for displaying captured frames
     private class CapturePanel extends JPanel {
         private BufferedImage currentFrame;
-        private int frameWidth = 640;
-        private int frameHeight = 480;
+        private int frameWidth = 2880;  // Surface Pro native resolution
+        private int frameHeight = 1920;
         
         public void updateFrame(int[] pixels) {
             // Create BufferedImage from pixel array
@@ -227,6 +228,10 @@ public class StreamingViewer extends JFrame {
         SwingUtilities.invokeLater(() -> {
             StreamingViewer viewer = new StreamingViewer();
             viewer.setVisible(true);
+            
+            // Auto-start after short delay (optional - remove if you want manual start)
+            // new Timer(500, e -> viewer.startStream()).start();
         });
     }
+    
 }
