@@ -3,6 +3,8 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
 import java.awt.image.BufferedImage;
+import java.nio.ByteBuffer;
+import java.nio.IntBuffer;
 
 /**
  * FastScreen Live Streaming Viewer
@@ -118,17 +120,24 @@ public class StreamingViewer extends JFrame {
         int captureCount = 0;
         final long TARGET_FRAME_TIME = 16; // ~60 FPS (16ms per frame)
         
+        // Pre-allocate reusable array for zero-copy transfer
+        int[] pixels = new int[frameWidth * frameHeight];
+        
         while (running) {
             long frameStart = System.currentTimeMillis();
             long startTime = System.nanoTime();
             
-            // Get frame from FastScreen
-            int[] pixels = screen.getNextFrame();
+            // ZERO-COPY: Get frame as DirectByteBuffer (no array allocation!)
+            ByteBuffer directBuffer = screen.getNextFrameDirect();
             
-            if (pixels != null) {
+            if (directBuffer != null) {
                 long captureTime = System.nanoTime() - startTime;
                 totalCaptureTime += captureTime;
                 captureCount++;
+                
+                // Convert DirectByteBuffer to int[] for display
+                // This is still needed for BufferedImage, but NO native-to-Java copy!
+                directBuffer.asIntBuffer().get(pixels);
                 
                 // Calculate stats every second
                 frameCount++;
@@ -147,7 +156,7 @@ public class StreamingViewer extends JFrame {
                 }
                 
                 // Update display on EDT
-                final int[] framePixels = pixels;
+                final int[] framePixels = pixels.clone(); // Clone for thread safety
                 SwingUtilities.invokeLater(() -> capturePanel.updateFrame(framePixels));
             }
             

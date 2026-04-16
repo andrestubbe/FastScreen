@@ -162,6 +162,25 @@ JNIEXPORT jintArray JNICALL Java_fastscreen_FastScreen_nativeGetNextFrame(JNIEnv
     return result;
 }
 
+// ZERO-COPY: DirectByteBuffer version - NO array copying!
+JNIEXPORT jobject JNICALL Java_fastscreen_FastScreen_nativeGetNextFrameDirect(JNIEnv* env, jobject obj) {
+    if (!g_streaming || !g_streamCapture) {
+        return nullptr;
+    }
+    
+    int* pixels = nullptr;
+    int width = 0;
+    int height = 0;
+    
+    if (!dxgiCaptureFrame(g_streamCapture, &pixels, &width, &height)) {
+        return nullptr;
+    }
+    
+    // Create DirectByteBuffer pointing directly to native memory
+    // NO COPY! Java can read/write directly to this memory
+    return env->NewDirectByteBuffer(pixels, width * height * 4);
+}
+
 JNIEXPORT void JNICALL Java_fastscreen_FastScreen_nativeStopStream(JNIEnv* env, jobject obj) {
     printf("[FastScreen] Stopping stream\n");
     
