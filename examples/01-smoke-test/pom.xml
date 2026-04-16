@@ -11,7 +11,7 @@
     <packaging>jar</packaging>
 
     <name>FastScreen Smoke Test</name>
-    <description>Basic functionality verification test</description>
+    <description>Basic functionality verification test - uses local FastScreen from parent project</description>
 
     <properties>
         <maven.compiler.source>17</maven.compiler.source>
@@ -27,18 +27,14 @@
     </repositories>
 
     <dependencies>
-        <dependency>
-            <groupId>com.github.andrestubbe</groupId>
-            <artifactId>fastscreen</artifactId>
-            <version>1.0.0-SNAPSHOT</version>
-        </dependency>
+        <!-- FastCore from JitPack (required for JNI loading) -->
         <dependency>
             <groupId>com.github.andrestubbe</groupId>
             <artifactId>fastcore</artifactId>
             <version>1.0.0</version>
         </dependency>
     </dependencies>
-
+    
     <build>
         <plugins>
             <plugin>
