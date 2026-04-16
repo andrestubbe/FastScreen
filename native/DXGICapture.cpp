@@ -32,6 +32,12 @@ private:
     int captureWidth = 0;   // 0 = full screen
     int captureHeight = 0;  // 0 = full screen
     
+    // Frame pooling - eliminate malloc/free per frame
+    static const int POOL_SIZE = 3;
+    int* bufferPool[POOL_SIZE] = {nullptr, nullptr, nullptr};
+    int poolIndex = 0;
+    bool poolInitialized = false;
+    
     bool createStagingTexture() {
         if (stagingTexture) {
             stagingTexture->Release();
@@ -176,13 +182,23 @@ public:
             return false;
         }
         
-        // Allocate pixel buffer for capture region
+        // Initialize frame pool
         bufferSize = captureWidth * captureHeight;
-        pixelBuffer = (int*)malloc(bufferSize * sizeof(int));
-        if (!pixelBuffer) {
-            printf("[DXGICapture] Failed to allocate pixel buffer\n");
-            return false;
+        if (!poolInitialized) {
+            for (int i = 0; i < POOL_SIZE; i++) {
+                bufferPool[i] = (int*)malloc(bufferSize * sizeof(int));
+                if (!bufferPool[i]) {
+                    printf("[DXGICapture] Failed to allocate pool buffer %d\n", i);
+                    return false;
+                }
+            }
+            poolInitialized = true;
+            poolIndex = 0;
+            printf("[DXGICapture] Frame pool initialized (%d buffers x %d pixels)\n", POOL_SIZE, bufferSize);
         }
+        
+        // Set initial pixel buffer to first pool slot
+        pixelBuffer = bufferPool[0];
         
         outputIndex = monitorIndex;
         printf("[DXGICapture] Initialization complete\n");
@@ -228,6 +244,10 @@ public:
             return false;
         }
         
+        // Get next buffer from pool (round-robin)
+        pixelBuffer = bufferPool[poolIndex];
+        poolIndex = (poolIndex + 1) % POOL_SIZE;
+        
         // Convert BGRA to RGBA - use capture region dimensions
         int outW = (captureWidth > 0) ? captureWidth : width;
         int outH = (captureHeight > 0) ? captureHeight : height;
@@ -258,10 +278,19 @@ public:
     }
     
     void cleanup() {
-        if (pixelBuffer) {
-            free(pixelBuffer);
-            pixelBuffer = nullptr;
+        // Free all pooled buffers
+        if (poolInitialized) {
+            for (int i = 0; i < POOL_SIZE; i++) {
+                if (bufferPool[i]) {
+                    free(bufferPool[i]);
+                    bufferPool[i] = nullptr;
+                }
+            }
+            poolInitialized = false;
+            poolIndex = 0;
         }
+        pixelBuffer = nullptr;
+        
         if (stagingTexture) {
             stagingTexture->Release();
             stagingTexture = nullptr;
