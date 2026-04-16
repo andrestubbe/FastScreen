@@ -92,6 +92,19 @@ public class StreamingViewer extends JFrame {
             return;
         }
         
+        // Enable GPU hardware scaling (2880x1920 -> 640x480)
+        // This is the KEY optimization: scaling happens on GPU, not CPU!
+        boolean scaled = screen.enableHardwareScaling(640, 480, false); // false = Point filter (fast)
+        if (scaled) {
+            System.out.println("[StreamingViewer] Hardware scaling enabled: 2880x1920 -> 640x480");
+        } else {
+            System.out.println("[StreamingViewer] Hardware scaling failed, using CPU fallback");
+        }
+        
+        // Update frame dimensions for display
+        frameWidth = 640;
+        frameHeight = 480;
+        
         // Capture thread
         captureThread = new Thread(this::captureLoop);
         captureThread.setDaemon(true);
@@ -185,8 +198,8 @@ public class StreamingViewer extends JFrame {
     // Custom panel for displaying captured frames
     private class CapturePanel extends JPanel {
         private BufferedImage currentFrame;
-        private int frameWidth = 2880;  // Surface Pro native resolution
-        private int frameHeight = 1920;
+        private int frameWidth = 640;   // Scaled output resolution (hardware)
+        private int frameHeight = 480;
         
         public void updateFrame(int[] pixels) {
             // Create BufferedImage from pixel array
