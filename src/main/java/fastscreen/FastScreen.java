@@ -54,6 +54,7 @@ public class FastScreen {
     private native boolean nativeStartStream(int x, int y, int width, int height);
     private native int[] nativeGetNextFrame();
     private native void nativeStopStream();
+    private native boolean nativeSetupHardwareScaling(int outW, int outH, int filter);
     private native int nativeGetPixelColor(int x, int y);
     private native void nativeDispose(long handle);
     private native int nativeGetMonitorCount();
@@ -176,6 +177,29 @@ public class FastScreen {
             this.streaming = true;
             this.frameWidth = width;
             this.frameHeight = height;
+        }
+        return success;
+    }
+    
+    /**
+     * Enables hardware-accelerated scaling for streaming.
+     * This dramatically reduces CPU load by scaling on the GPU.
+     * Must be called AFTER startStream().
+     * 
+     * @param outputWidth Target width (e.g., 640)
+     * @param outputHeight Target height (e.g., 480)
+     * @param useLinearFilter true for smooth (Linear), false for pixelated (Point)
+     * @return true if hardware scaling was enabled
+     */
+    public boolean enableHardwareScaling(int outputWidth, int outputHeight, boolean useLinearFilter) {
+        if (!streaming) {
+            throw new IllegalStateException("Must call startStream() before enableHardwareScaling()");
+        }
+        int filter = useLinearFilter ? 1 : 0;
+        boolean success = nativeSetupHardwareScaling(outputWidth, outputHeight, filter);
+        if (success) {
+            this.frameWidth = outputWidth;
+            this.frameHeight = outputHeight;
         }
         return success;
     }

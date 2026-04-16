@@ -9,9 +9,46 @@
 #include <stdlib.h>
 #include <d3d11.h>
 #include <dxgi1_2.h>
+#include <d3dcompiler.h>
 
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "dxgi.lib")
+#pragma comment(lib, "d3dcompiler.lib")
+
+// Embedded HLSL Shaders for hardware scaling
+// Compile with: fxc /T vs_4_0 /E VSMain
+const char* g_vertexShaderCode = R"(
+struct VSInput {
+    float2 pos : POSITION;
+    float2 tex : TEXCOORD;
+};
+struct PSInput {
+    float4 pos : SV_POSITION;
+    float2 tex : TEXCOORD;
+};
+PSInput VSMain(VSInput input) {
+    PSInput output;
+    output.pos = float4(input.pos, 0.0, 1.0);
+    output.tex = input.tex;
+    return output;
+}
+)";
+
+// Pixel shader: Sample texture with filter, convert BGRA->RGBA
+// Compile with: fxc /T ps_4_0 /E PSMain
+const char* g_pixelShaderCode = R"(
+Texture2D g_texture : register(t0);
+SamplerState g_sampler : register(s0);
+struct PSInput {
+    float4 pos : SV_POSITION;
+    float2 tex : TEXCOORD;
+};
+float4 PSMain(PSInput input) : SV_TARGET {
+    float4 color = g_texture.Sample(g_sampler, input.tex);
+    // BGRA to RGBA swizzle
+    return float4(color.b, color.g, color.r, color.a);
+}
+)";
 
 class DXGICapture {
 private:
@@ -22,11 +59,19 @@ private:
     
     // Hardware scaling resources
     ID3D11Texture2D* sourceTexture = nullptr;      // Full resolution desktop
-    ID3D11Texture2D* scaledTexture = nullptr;      // Hardware-scaled output
+    ID3D11Texture2D* scaledTexture = nullptr;      // Hardware-scaled output (GPU render target)
+    ID3D11Texture2D* readbackTexture = nullptr;    // CPU-readable staging for scaled output
     ID3D11RenderTargetView* rtv = nullptr;         // Render target for scaling
     ID3D11ShaderResourceView* srv = nullptr;       // Source view
     ID3D11SamplerState* sampler = nullptr;       // Point or Linear filter
     ID3D11BlendState* blendState = nullptr;        // No blending needed
+    
+    // Shader objects
+    ID3D11VertexShader* vertexShader = nullptr;
+    ID3D11PixelShader* pixelShader = nullptr;
+    ID3D11InputLayout* inputLayout = nullptr;
+    ID3D11Buffer* vertexBuffer = nullptr;
+    ID3D11RasterizerState* rasterState = nullptr;
     
     int outputIndex = 0;
     int width = 0;          // Monitor full width
@@ -83,15 +128,12 @@ private:
         return true;
     }
     
-    // Setup hardware scaling resources
+    // Setup hardware scaling with full D3D11 rendering
     bool setupHardwareScaling(int outW, int outH, int filter) {
         if (!device || !context) return false;
         
         // Cleanup existing scaling resources
-        if (scaledTexture) { scaledTexture->Release(); scaledTexture = nullptr; }
-        if (rtv) { rtv->Release(); rtv = nullptr; }
-        if (srv) { srv->Release(); srv = nullptr; }
-        if (sampler) { sampler->Release(); sampler = nullptr; }
+        cleanupScalingResources();
         
         outputWidth = outW;
         outputHeight = outH;
@@ -103,28 +145,119 @@ private:
             return true;
         }
         
-        printf("[DXGICapture] Setting up hardware scaling: %dx%d -> %dx%d (filter: %s)\n",
+        printf("[DXGICapture] Setting up HARDWARE rendering: %dx%d -> %dx%d (filter: %s)\n",
                captureWidth, captureHeight, outW, outH, filter == 0 ? "Point" : "Linear");
         
-        // Create scaled output texture (staging for CPU read)
-        D3D11_TEXTURE2D_DESC desc = {};
-        desc.Width = outW;
-        desc.Height = outH;
-        desc.MipLevels = 1;
-        desc.ArraySize = 1;
-        desc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
-        desc.SampleDesc.Count = 1;
-        desc.Usage = D3D11_USAGE_STAGING;
-        desc.BindFlags = 0;
-        desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+        HRESULT hr;
         
-        HRESULT hr = device->CreateTexture2D(&desc, nullptr, &scaledTexture);
+        // Compile and create vertex shader
+        ID3DBlob* vsBlob = nullptr;
+        ID3DBlob* errorBlob = nullptr;
+        hr = D3DCompile(g_vertexShaderCode, strlen(g_vertexShaderCode), "VS", nullptr, nullptr, 
+                        "VSMain", "vs_4_0", 0, 0, &vsBlob, &errorBlob);
         if (FAILED(hr)) {
-            printf("[DXGICapture] Failed to create scaled texture: 0x%08X\n", hr);
+            if (errorBlob) {
+                printf("[DXGICapture] VS compile error: %s\n", (char*)errorBlob->GetBufferPointer());
+                errorBlob->Release();
+            }
+            return false;
+        }
+        hr = device->CreateVertexShader(vsBlob->GetBufferPointer(), vsBlob->GetBufferSize(), nullptr, &vertexShader);
+        if (FAILED(hr)) {
+            printf("[DXGICapture] Failed to create VS: 0x%08X\n", hr);
+            vsBlob->Release();
             return false;
         }
         
-        // Create sampler state for filtering
+        // Create input layout
+        D3D11_INPUT_ELEMENT_DESC layout[] = {
+            { "POSITION", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+            { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 8, D3D11_INPUT_PER_VERTEX_DATA, 0 }
+        };
+        hr = device->CreateInputLayout(layout, 2, vsBlob->GetBufferPointer(), vsBlob->GetBufferSize(), &inputLayout);
+        vsBlob->Release();
+        if (FAILED(hr)) {
+            printf("[DXGICapture] Failed to create input layout: 0x%08X\n", hr);
+            return false;
+        }
+        
+        // Compile and create pixel shader
+        ID3DBlob* psBlob = nullptr;
+        hr = D3DCompile(g_pixelShaderCode, strlen(g_pixelShaderCode), "PS", nullptr, nullptr,
+                        "PSMain", "ps_4_0", 0, 0, &psBlob, &errorBlob);
+        if (FAILED(hr)) {
+            if (errorBlob) {
+                printf("[DXGICapture] PS compile error: %s\n", (char*)errorBlob->GetBufferPointer());
+                errorBlob->Release();
+            }
+            return false;
+        }
+        hr = device->CreatePixelShader(psBlob->GetBufferPointer(), psBlob->GetBufferSize(), nullptr, &pixelShader);
+        psBlob->Release();
+        if (FAILED(hr)) {
+            printf("[DXGICapture] Failed to create PS: 0x%08X\n", hr);
+            return false;
+        }
+        
+        // Create fullscreen quad vertex buffer (2 triangles)
+        struct Vertex { float x, y, u, v; };
+        Vertex vertices[] = {
+            { -1.0f,  1.0f, 0.0f, 0.0f },  // Top-left
+            {  1.0f,  1.0f, 1.0f, 0.0f },  // Top-right
+            { -1.0f, -1.0f, 0.0f, 1.0f },  // Bottom-left
+            {  1.0f, -1.0f, 1.0f, 1.0f }   // Bottom-right
+        };
+        D3D11_BUFFER_DESC vbDesc = {};
+        vbDesc.Usage = D3D11_USAGE_IMMUTABLE;
+        vbDesc.ByteWidth = sizeof(vertices);
+        vbDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+        D3D11_SUBRESOURCE_DATA vbData = { vertices, 0, 0 };
+        hr = device->CreateBuffer(&vbDesc, &vbData, &vertexBuffer);
+        if (FAILED(hr)) {
+            printf("[DXGICapture] Failed to create vertex buffer: 0x%08X\n", hr);
+            return false;
+        }
+        
+        // Create render target texture (GPU-only, bind as render target)
+        D3D11_TEXTURE2D_DESC rtDesc = {};
+        rtDesc.Width = outW;
+        rtDesc.Height = outH;
+        rtDesc.MipLevels = 1;
+        rtDesc.ArraySize = 1;
+        rtDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+        rtDesc.SampleDesc.Count = 1;
+        rtDesc.Usage = D3D11_USAGE_DEFAULT;
+        rtDesc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+        hr = device->CreateTexture2D(&rtDesc, nullptr, &scaledTexture);
+        if (FAILED(hr)) {
+            printf("[DXGICapture] Failed to create render target: 0x%08X\n", hr);
+            return false;
+        }
+        
+        // Create render target view
+        hr = device->CreateRenderTargetView(scaledTexture, nullptr, &rtv);
+        if (FAILED(hr)) {
+            printf("[DXGICapture] Failed to create RTV: 0x%08X\n", hr);
+            return false;
+        }
+        
+        // Create readback texture (staging for CPU)
+        D3D11_TEXTURE2D_DESC rbDesc = {};
+        rbDesc.Width = outW;
+        rbDesc.Height = outH;
+        rbDesc.MipLevels = 1;
+        rbDesc.ArraySize = 1;
+        rbDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+        rbDesc.SampleDesc.Count = 1;
+        rbDesc.Usage = D3D11_USAGE_STAGING;
+        rbDesc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+        hr = device->CreateTexture2D(&rbDesc, nullptr, &readbackTexture);
+        if (FAILED(hr)) {
+            printf("[DXGICapture] Failed to create readback texture: 0x%08X\n", hr);
+            return false;
+        }
+        
+        // Create sampler
         D3D11_SAMPLER_DESC sampDesc = {};
         sampDesc.Filter = (filter == 0) ? D3D11_FILTER_MIN_MAG_MIP_POINT : D3D11_FILTER_MIN_MAG_MIP_LINEAR;
         sampDesc.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
@@ -133,19 +266,62 @@ private:
         sampDesc.ComparisonFunc = D3D11_COMPARISON_NEVER;
         sampDesc.MinLOD = 0;
         sampDesc.MaxLOD = D3D11_FLOAT32_MAX;
-        
         hr = device->CreateSamplerState(&sampDesc, &sampler);
         if (FAILED(hr)) {
             printf("[DXGICapture] Failed to create sampler: 0x%08X\n", hr);
             return false;
         }
         
-        // Note: For full hardware scaling with rendering, we'd need shaders and vertex buffers
-        // For now, we'll use a simpler approach: create a smaller staging texture
-        // and use D3D11's built-in scaling during CopySubresourceRegion if possible
+        // Create rasterizer state (no culling, fill mode)
+        D3D11_RASTERIZER_DESC rasterDesc = {};
+        rasterDesc.FillMode = D3D11_FILL_SOLID;
+        rasterDesc.CullMode = D3D11_CULL_NONE;
+        hr = device->CreateRasterizerState(&rasterDesc, &rasterState);
+        if (FAILED(hr)) {
+            printf("[DXGICapture] Failed to create raster state: 0x%08X\n", hr);
+            return false;
+        }
         
-        printf("[DXGICapture] Hardware scaling setup complete\n");
+        // Resize buffer pool for scaled output
+        int newBufferSize = outW * outH;
+        if (bufferSize != newBufferSize) {
+            // Cleanup old pool
+            if (poolInitialized) {
+                for (int i = 0; i < POOL_SIZE; i++) {
+                    if (bufferPool[i]) { free(bufferPool[i]); bufferPool[i] = nullptr; }
+                }
+            }
+            // Create new pool with scaled size
+            bufferSize = newBufferSize;
+            for (int i = 0; i < POOL_SIZE; i++) {
+                bufferPool[i] = (int*)malloc(bufferSize * sizeof(int));
+                if (!bufferPool[i]) {
+                    printf("[DXGICapture] Failed to allocate scaled pool buffer %d\n", i);
+                    return false;
+                }
+            }
+            poolInitialized = true;
+            poolIndex = 0;
+            printf("[DXGICapture] Resized frame pool for %dx%d output\n", outW, outH);
+        }
+        
+        printf("[DXGICapture] HARDWARE rendering setup complete!\n");
         return true;
+    }
+    
+    void cleanupScalingResources() {
+        if (rasterState) { rasterState->Release(); rasterState = nullptr; }
+        if (vertexBuffer) { vertexBuffer->Release(); vertexBuffer = nullptr; }
+        if (inputLayout) { inputLayout->Release(); inputLayout = nullptr; }
+        if (pixelShader) { pixelShader->Release(); pixelShader = nullptr; }
+        if (vertexShader) { vertexShader->Release(); vertexShader = nullptr; }
+        if (sampler) { sampler->Release(); sampler = nullptr; }
+        if (rtv) { rtv->Release(); rtv = nullptr; }
+        if (srv) { srv->Release(); srv = nullptr; }
+        if (readbackTexture) { readbackTexture->Release(); readbackTexture = nullptr; }
+        if (scaledTexture) { scaledTexture->Release(); scaledTexture = nullptr; }
+        if (sourceTexture) { sourceTexture->Release(); sourceTexture = nullptr; }
+        useScaling = false;
     }
     
 public:
@@ -311,6 +487,95 @@ public:
             return false;
         }
         
+        // HARDWARE SCALING PATH: Use GPU rendering
+        if (useScaling && vertexShader && pixelShader && scaledTexture) {
+            // Create SRV for desktop texture if not exists
+            if (!srv) {
+                hr = device->CreateShaderResourceView(desktopTexture, nullptr, &srv);
+                if (FAILED(hr)) {
+                    printf("[DXGICapture] Failed to create SRV: 0x%08X\n", hr);
+                    desktopTexture->Release();
+                    duplication->ReleaseFrame();
+                    return false;
+                }
+            } else {
+                // Update SRV to point to new desktop texture
+                srv->Release();
+                hr = device->CreateShaderResourceView(desktopTexture, nullptr, &srv);
+                if (FAILED(hr)) {
+                    printf("[DXGICapture] Failed to update SRV: 0x%08X\n", hr);
+                    desktopTexture->Release();
+                    duplication->ReleaseFrame();
+                    return false;
+                }
+            }
+            
+            // Set render target
+            context->OMSetRenderTargets(1, &rtv, nullptr);
+            
+            // Set viewport
+            D3D11_VIEWPORT viewport = {};
+            viewport.Width = (float)outputWidth;
+            viewport.Height = (float)outputHeight;
+            viewport.MaxDepth = 1.0f;
+            context->RSSetViewports(1, &viewport);
+            
+            // Set shaders
+            context->VSSetShader(vertexShader, nullptr, 0);
+            context->PSSetShader(pixelShader, nullptr, 0);
+            context->PSSetSamplers(0, 1, &sampler);
+            context->PSSetShaderResources(0, 1, &srv);
+            
+            // Set input layout and vertex buffer
+            context->IASetInputLayout(inputLayout);
+            UINT stride = 16; // 4 floats * 4 bytes
+            UINT offset = 0;
+            context->IASetVertexBuffers(0, 1, &vertexBuffer, &stride, &offset);
+            context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+            
+            // Set rasterizer state
+            context->RSSetState(rasterState);
+            
+            // Draw fullscreen quad (4 vertices = 2 triangles)
+            context->Draw(4, 0);
+            
+            // Copy from render target to readback texture
+            context->CopyResource(readbackTexture, scaledTexture);
+            
+            // Map readback texture
+            D3D11_MAPPED_SUBRESOURCE mappedResource;
+            hr = context->Map(readbackTexture, 0, D3D11_MAP_READ, 0, &mappedResource);
+            if (FAILED(hr)) {
+                printf("[DXGICapture] Failed to map readback: 0x%08X\n", hr);
+                desktopTexture->Release();
+                duplication->ReleaseFrame();
+                return false;
+            }
+            
+            // Get next buffer from pool
+            pixelBuffer = bufferPool[poolIndex];
+            poolIndex = (poolIndex + 1) % POOL_SIZE;
+            
+            // Copy pixels (already RGBA from shader!)
+            BYTE* srcPixels = (BYTE*)mappedResource.pData;
+            for (int y = 0; y < outputHeight; y++) {
+                memcpy(&pixelBuffer[y * outputWidth], 
+                       &srcPixels[y * mappedResource.RowPitch], 
+                       outputWidth * 4);
+            }
+            
+            context->Unmap(readbackTexture, 0);
+            desktopTexture->Release();
+            duplication->ReleaseFrame();
+            
+            *pixels = pixelBuffer;
+            *outWidth = outputWidth;
+            *outHeight = outputHeight;
+            
+            return true;
+        }
+        
+        // FALLBACK PATH: Original CPU-based conversion (no scaling)
         // Copy to staging texture
         context->CopyResource(stagingTexture, desktopTexture);
         desktopTexture->Release();
@@ -371,10 +636,16 @@ public:
         pixelBuffer = nullptr;
         
         // Release hardware scaling resources
+        if (rasterState) { rasterState->Release(); rasterState = nullptr; }
+        if (vertexBuffer) { vertexBuffer->Release(); vertexBuffer = nullptr; }
+        if (inputLayout) { inputLayout->Release(); inputLayout = nullptr; }
+        if (pixelShader) { pixelShader->Release(); pixelShader = nullptr; }
+        if (vertexShader) { vertexShader->Release(); vertexShader = nullptr; }
         if (blendState) { blendState->Release(); blendState = nullptr; }
         if (sampler) { sampler->Release(); sampler = nullptr; }
         if (rtv) { rtv->Release(); rtv = nullptr; }
         if (srv) { srv->Release(); srv = nullptr; }
+        if (readbackTexture) { readbackTexture->Release(); readbackTexture = nullptr; }
         if (scaledTexture) { scaledTexture->Release(); scaledTexture = nullptr; }
         if (sourceTexture) { sourceTexture->Release(); sourceTexture = nullptr; }
         

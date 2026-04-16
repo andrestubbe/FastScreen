@@ -13,6 +13,7 @@ extern "C" {
     void* dxgiCreateCapture();
     bool dxgiInitialize(void* capture, int monitorIndex);
     bool dxgiInitializeRegion(void* capture, int monitorIndex, int x, int y, int w, int h);
+    bool dxgiSetupScaling(void* capture, int outW, int outH, int filter);
     bool dxgiCaptureFrame(void* capture, int** pixels, int* width, int* height);
     void dxgiDestroyCapture(void* capture);
 }
@@ -173,6 +174,27 @@ JNIEXPORT void JNICALL Java_fastscreen_FastScreen_nativeStopStream(JNIEnv* env, 
     g_streaming = false;
     g_streamWidth = 0;
     g_streamHeight = 0;
+}
+
+JNIEXPORT jboolean JNICALL Java_fastscreen_FastScreen_nativeSetupHardwareScaling(
+    JNIEnv* env, jobject obj, jint outW, jint outH, jint filter) {
+    
+    printf("[FastScreen] Setting up hardware scaling: %dx%d -> %dx%d (filter: %d)\n",
+           g_streamWidth, g_streamHeight, outW, outH, filter);
+    
+    if (!g_streamCapture) {
+        printf("[FastScreen] No stream capture available for scaling\n");
+        return JNI_FALSE;
+    }
+    
+    bool success = dxgiSetupScaling(g_streamCapture, outW, outH, filter);
+    if (success) {
+        // Update stream dimensions to match output
+        g_streamWidth = outW;
+        g_streamHeight = outH;
+    }
+    
+    return success ? JNI_TRUE : JNI_FALSE;
 }
 
 JNIEXPORT jint JNICALL Java_fastscreen_FastScreen_nativeGetPixelColor(
