@@ -25,6 +25,13 @@ JNIEXPORT jlong JNICALL Java_fastscreen_FastScreen_nativeInit(JNIEnv *, jobject)
 
 /*
  * Class:     fastscreen_FastScreen
+ * Method:    nativeInitRegion
+ * Signature: (IIII)J
+ */
+JNIEXPORT jlong JNICALL Java_fastscreen_FastScreen_nativeInitRegion(JNIEnv *, jobject, jint, jint, jint, jint);
+
+/*
+ * Class:     fastscreen_FastScreen
  * Method:    nativeCaptureScreen
  * Signature: (IIII)[I
  */

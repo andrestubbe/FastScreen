@@ -49,6 +49,7 @@ public class FastScreen {
     
     // Native methods
     private native long nativeInit();
+    private native long nativeInitRegion(int x, int y, int width, int height);
     private native int[] nativeCaptureScreen(int x, int y, int width, int height);
     private native boolean nativeStartStream(int x, int y, int width, int height);
     private native int[] nativeGetNextFrame();
@@ -63,6 +64,12 @@ public class FastScreen {
     private int frameHeight = 0;
     private int lastFrameWidth = 0;
     private int lastFrameHeight = 0;
+    
+    // Current capture region
+    private int captureX = 0;
+    private int captureY = 0;
+    private int captureWidth = 0;
+    private int captureHeight = 0;
     
     // Frame polling buffer - stores frame from hasNewFrame() for getNextFrame()
     private int[] bufferedFrame = null;
@@ -85,14 +92,15 @@ public class FastScreen {
      * @return BufferedImage containing screenshot, or null if capture failed
      */
     public BufferedImage captureScreen(Rectangle rect) {
-        int[] pixels = nativeCaptureScreen(rect.x, rect.y, rect.width, rect.height);
+        // Use captureRaw to handle region reinitialization
+        int[] pixels = captureRaw(rect.x, rect.y, rect.width, rect.height);
         if (pixels == null) {
             return null;
         }
         
-        // Create BufferedImage from pixels (assuming full screen for now)
-        BufferedImage image = new BufferedImage(lastFrameWidth, lastFrameHeight, BufferedImage.TYPE_INT_ARGB);
-        image.setRGB(0, 0, lastFrameWidth, lastFrameHeight, pixels, 0, lastFrameWidth);
+        // Create BufferedImage with requested dimensions
+        BufferedImage image = new BufferedImage(rect.width, rect.height, BufferedImage.TYPE_INT_ARGB);
+        image.setRGB(0, 0, rect.width, rect.height, pixels, 0, rect.width);
         return image;
     }
     
@@ -106,6 +114,34 @@ public class FastScreen {
      * @return int array of RGBA pixels, or null if capture failed
      */
     public int[] captureRaw(int x, int y, int width, int height) {
+        // Check if we need to reinitialize for a different region
+        if (width != captureWidth || height != captureHeight || 
+            x != captureX || y != captureY) {
+            // Dispose old capture
+            if (nativeHandle != 0) {
+                nativeDispose(nativeHandle);
+            }
+            // Reinitialize with new region
+            nativeHandle = nativeInitRegion(x, y, width, height);
+            if (nativeHandle == 0) {
+                // Fall back to full screen
+                nativeHandle = nativeInit();
+                if (nativeHandle == 0) {
+                    return null;
+                }
+                // Update region to full screen
+                captureX = 0;
+                captureY = 0;
+                captureWidth = 0; // Will be determined by native
+                captureHeight = 0;
+            } else {
+                captureX = x;
+                captureY = y;
+                captureWidth = width;
+                captureHeight = height;
+            }
+        }
+        
         int[] pixels = nativeCaptureScreen(x, y, width, height);
         if (pixels != null) {
             lastFrameWidth = width;
