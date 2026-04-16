@@ -12,6 +12,7 @@
 extern "C" {
     void* dxgiCreateCapture();
     bool dxgiInitialize(void* capture, int monitorIndex);
+    bool dxgiInitializeRegion(void* capture, int monitorIndex, int x, int y, int w, int h);
     bool dxgiCaptureFrame(void* capture, int** pixels, int* width, int* height);
     void dxgiDestroyCapture(void* capture);
 }
@@ -32,11 +33,28 @@ static bool g_streaming = false;
 JNIEXPORT jlong JNICALL Java_fastscreen_FastScreen_nativeInit(JNIEnv* env, jobject obj) {
     printf("[FastScreen] Native initialization\n");
     
-    // Create global capture instance
+    // Create global capture instance (full screen)
     if (!g_capture) {
         g_capture = dxgiCreateCapture();
         if (!dxgiInitialize(g_capture, 0)) {
             printf("[FastScreen] Failed to initialize DXGI capture\n");
+            dxgiDestroyCapture(g_capture);
+            g_capture = nullptr;
+            return 0;
+        }
+    }
+    
+    return (jlong)g_capture;
+}
+
+JNIEXPORT jlong JNICALL Java_fastscreen_FastScreen_nativeInitRegion(JNIEnv* env, jobject obj, jint x, jint y, jint w, jint h) {
+    printf("[FastScreen] Native initialization region (%d,%d %dx%d)\n", x, y, w, h);
+    
+    // Create global capture instance with region
+    if (!g_capture) {
+        g_capture = dxgiCreateCapture();
+        if (!dxgiInitializeRegion(g_capture, 0, x, y, w, h)) {
+            printf("[FastScreen] Failed to initialize DXGI capture region\n");
             dxgiDestroyCapture(g_capture);
             g_capture = nullptr;
             return 0;
@@ -88,13 +106,24 @@ JNIEXPORT jboolean JNICALL Java_fastscreen_FastScreen_nativeStartStream(
         return JNI_FALSE;
     }
     
-    // Create separate capture instance for streaming
+    // Try to create region-based capture for streaming
+    // Note: DXGI Desktop Duplication can only have ONE per monitor
+    // So we try to create a new one, but if it fails (e.g., virtual desktop),
+    // we fall back to using the global capture
     g_streamCapture = dxgiCreateCapture();
-    if (!dxgiInitialize(g_streamCapture, 0)) {
-        printf("[FastScreen] Failed to initialize stream capture\n");
+    if (!dxgiInitializeRegion(g_streamCapture, 0, x, y, width, height)) {
+        printf("[FastScreen] Region capture failed, trying to reuse global capture\n");
         dxgiDestroyCapture(g_streamCapture);
-        g_streamCapture = nullptr;
-        return JNI_FALSE;
+        
+        // Fall back to global capture (if it exists)
+        if (g_capture) {
+            printf("[FastScreen] Using global capture for streaming\n");
+            g_streamCapture = g_capture;
+        } else {
+            printf("[FastScreen] No global capture available\n");
+            g_streamCapture = nullptr;
+            return JNI_FALSE;
+        }
     }
     
     g_streamX = x;
@@ -135,10 +164,11 @@ JNIEXPORT jintArray JNICALL Java_fastscreen_FastScreen_nativeGetNextFrame(JNIEnv
 JNIEXPORT void JNICALL Java_fastscreen_FastScreen_nativeStopStream(JNIEnv* env, jobject obj) {
     printf("[FastScreen] Stopping stream\n");
     
-    if (g_streamCapture) {
+    // Only destroy if it's a separate capture (not the global one)
+    if (g_streamCapture && g_streamCapture != g_capture) {
         dxgiDestroyCapture(g_streamCapture);
-        g_streamCapture = nullptr;
     }
+    g_streamCapture = nullptr;
     
     g_streaming = false;
     g_streamWidth = 0;

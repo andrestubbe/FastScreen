@@ -21,10 +21,16 @@ private:
     ID3D11Texture2D* stagingTexture = nullptr;
     
     int outputIndex = 0;
-    int width = 0;
-    int height = 0;
+    int width = 0;          // Monitor full width
+    int height = 0;         // Monitor full height
     int* pixelBuffer = nullptr;
     int bufferSize = 0;
+    
+    // Capture region (for partial screen capture)
+    int captureX = 0;
+    int captureY = 0;
+    int captureWidth = 0;   // 0 = full screen
+    int captureHeight = 0;  // 0 = full screen
     
     bool createStagingTexture() {
         if (stagingTexture) {
@@ -32,9 +38,13 @@ private:
             stagingTexture = nullptr;
         }
         
+        // Use capture region size, not full monitor size
+        int texWidth = (captureWidth > 0) ? captureWidth : width;
+        int texHeight = (captureHeight > 0) ? captureHeight : height;
+        
         D3D11_TEXTURE2D_DESC desc = {};
-        desc.Width = width;
-        desc.Height = height;
+        desc.Width = texWidth;
+        desc.Height = texHeight;
         desc.MipLevels = 1;
         desc.ArraySize = 1;
         desc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
@@ -46,7 +56,7 @@ private:
         
         HRESULT hr = device->CreateTexture2D(&desc, nullptr, &stagingTexture);
         if (FAILED(hr)) {
-            printf("[DXGICapture] Failed to create staging texture: 0x%08X\n", hr);
+            printf("[DXGICapture] Failed to create staging texture (%dx%d): 0x%08X\n", texWidth, texHeight, hr);
             return false;
         }
         
@@ -60,10 +70,17 @@ public:
         cleanup();
     }
     
-    bool initialize(int monitorIndex = 0) {
-        printf("[DXGICapture] Initializing for monitor %d\n", monitorIndex);
+    bool initialize(int monitorIndex = 0, int x = 0, int y = 0, int w = 0, int h = 0) {
+        printf("[DXGICapture] Initializing for monitor %d region (%d,%d %dx%d)\n", 
+               monitorIndex, x, y, w, h);
         
         HRESULT hr;
+        
+        // Store capture region
+        captureX = x;
+        captureY = y;
+        captureWidth = w;
+        captureHeight = h;
         
         // Create D3D11 device
         D3D_FEATURE_LEVEL featureLevels[] = { D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_10_1 };
@@ -122,6 +139,16 @@ public:
             printf("[DXGICapture] Monitor %d: %dx%d\n", monitorIndex, width, height);
         }
         
+        // Validate capture region
+        if (captureWidth <= 0 || captureWidth > width) captureWidth = width;
+        if (captureHeight <= 0 || captureHeight > height) captureHeight = height;
+        if (captureX < 0) captureX = 0;
+        if (captureY < 0) captureY = 0;
+        if (captureX + captureWidth > width) captureWidth = width - captureX;
+        if (captureY + captureHeight > height) captureHeight = height - captureY;
+        
+        printf("[DXGICapture] Capture region: (%d,%d %dx%d)\n", captureX, captureY, captureWidth, captureHeight);
+        
         // Create desktop duplication
         IDXGIOutput1* dxgiOutput1 = nullptr;
         hr = dxgiOutput->QueryInterface(__uuidof(IDXGIOutput1), (void**)&dxgiOutput1);
@@ -136,19 +163,21 @@ public:
         if (FAILED(hr)) {
             if (hr == DXGI_ERROR_NOT_CURRENTLY_AVAILABLE) {
                 printf("[DXGICapture] Desktop Duplication already in use by another application\n");
+            } else if (hr == E_INVALIDARG || hr == 0x80070057) {
+                printf("[DXGICapture] Invalid parameter - virtual desktop or unsupported format\n");
             } else {
                 printf("[DXGICapture] Failed to create duplication: 0x%08X\n", hr);
             }
             return false;
         }
         
-        // Create staging texture
+        // Create staging texture for capture region size
         if (!createStagingTexture()) {
             return false;
         }
         
-        // Allocate pixel buffer (RGBA)
-        bufferSize = width * height;
+        // Allocate pixel buffer for capture region
+        bufferSize = captureWidth * captureHeight;
         pixelBuffer = (int*)malloc(bufferSize * sizeof(int));
         if (!pixelBuffer) {
             printf("[DXGICapture] Failed to allocate pixel buffer\n");
@@ -199,12 +228,15 @@ public:
             return false;
         }
         
-        // Convert BGRA to RGBA
+        // Convert BGRA to RGBA - use capture region dimensions
+        int outW = (captureWidth > 0) ? captureWidth : width;
+        int outH = (captureHeight > 0) ? captureHeight : height;
+        
         BYTE* srcPixels = (BYTE*)mappedResource.pData;
-        for (int y = 0; y < height; y++) {
-            for (int x = 0; x < width; x++) {
+        for (int y = 0; y < outH; y++) {
+            for (int x = 0; x < outW; x++) {
                 int srcIdx = y * mappedResource.RowPitch + x * 4;
-                int dstIdx = y * width + x;
+                int dstIdx = y * outW + x;
                 
                 BYTE b = srcPixels[srcIdx + 0];
                 BYTE g = srcPixels[srcIdx + 1];
@@ -219,8 +251,8 @@ public:
         duplication->ReleaseFrame();
         
         *pixels = pixelBuffer;
-        *outWidth = width;
-        *outHeight = height;
+        *outWidth = outW;
+        *outHeight = outH;
         
         return true;
     }
@@ -262,8 +294,14 @@ extern "C" {
         return new DXGICapture();
     }
     
+    // Legacy initialize (full screen)
     bool dxgiInitialize(void* capture, int monitorIndex) {
-        return static_cast<DXGICapture*>(capture)->initialize(monitorIndex);
+        return static_cast<DXGICapture*>(capture)->initialize(monitorIndex, 0, 0, 0, 0);
+    }
+    
+    // Region-based initialize
+    bool dxgiInitializeRegion(void* capture, int monitorIndex, int x, int y, int w, int h) {
+        return static_cast<DXGICapture*>(capture)->initialize(monitorIndex, x, y, w, h);
     }
     
     bool dxgiCaptureFrame(void* capture, int** pixels, int* width, int* height) {
