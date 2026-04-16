@@ -64,6 +64,10 @@ public class FastScreen {
     private int lastFrameWidth = 0;
     private int lastFrameHeight = 0;
     
+    // Frame polling buffer - stores frame from hasNewFrame() for getNextFrame()
+    private int[] bufferedFrame = null;
+    private boolean frameBuffered = false;
+    
     /**
      * Creates a new FastScreen instance.
      */
@@ -142,6 +146,7 @@ public class FastScreen {
     
     /**
      * Checks if a new frame is available in streaming mode.
+     * Polls native side and buffers the frame for getNextFrame().
      * 
      * @return true if new frame available
      */
@@ -149,13 +154,22 @@ public class FastScreen {
         if (!streaming) {
             return false;
         }
-        // Try to get next frame (non-blocking check)
-        int[] test = nativeGetNextFrame();
-        return test != null;
+        
+        // If we already have a buffered frame, return true
+        if (frameBuffered && bufferedFrame != null) {
+            return true;
+        }
+        
+        // Try to get next frame from native
+        bufferedFrame = nativeGetNextFrame();
+        frameBuffered = (bufferedFrame != null);
+        return frameBuffered;
     }
     
     /**
      * Gets the next frame in streaming mode.
+     * If hasNewFrame() was called before, returns the buffered frame.
+     * Otherwise polls native side directly.
      * 
      * @return int array of RGBA pixels, or null if no new frame
      */
@@ -163,6 +177,16 @@ public class FastScreen {
         if (!streaming) {
             return null;
         }
+        
+        // If we have a buffered frame from hasNewFrame(), return it
+        if (frameBuffered && bufferedFrame != null) {
+            int[] frame = bufferedFrame;
+            bufferedFrame = null;
+            frameBuffered = false;
+            return frame;
+        }
+        
+        // Otherwise poll native directly
         return nativeGetNextFrame();
     }
     
@@ -173,6 +197,9 @@ public class FastScreen {
         if (streaming) {
             nativeStopStream();
             this.streaming = false;
+            // Clear any buffered frame
+            bufferedFrame = null;
+            frameBuffered = false;
         }
     }
     
