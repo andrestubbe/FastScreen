@@ -70,9 +70,9 @@ echo ===========================================
 echo.
 
 if defined FASTCORE_JAR (
-    java -cp ".;%FASTSCREEN_ROOT%\target\classes;%FASTCORE_JAR%" -Djava.library.path="%FASTSCREEN_ROOT%\native" fastscreen.examples.SmokeTest
+    java -cp ".;%FASTSCREEN_ROOT%\target\classes;%FASTCORE_JAR%" -Djava.library.path="%FASTSCREEN_ROOT%\native" SmokeTest
 ) else (
-    java -cp ".;%FASTSCREEN_ROOT%\target\classes" -Djava.library.path="%FASTSCREEN_ROOT%\native" fastscreen.examples.SmokeTest
+    java -cp ".;%FASTSCREEN_ROOT%\target\classes" -Djava.library.path="%FASTSCREEN_ROOT%\native" SmokeTest
 )
 
 echo.
