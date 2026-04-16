@@ -1,0 +1,46 @@
+# Compiled class files
+*.class
+
+# Maven
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+buildNumber.properties
+.mvn/timing.properties
+.mvn/wrapper/maven-wrapper.jar
+
+# IDE
+.idea/
+*.iml
+*.iws
+.vscode/settings.json
+.classpath
+.project
+.settings/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Native build
+native/*.dll
+native/*.so
+native/*.dylib
+native/*.obj
+native/*.lib
+native/*.exp
+native/Debug/
+native/Release/
+native/x64/
+
+# Logs
+*.log
+
+# FastJava specific
+*.tmp
+screenshot_*.png
+frame_*.png
