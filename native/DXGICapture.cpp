@@ -128,12 +128,24 @@ private:
         return true;
     }
     
+public:
     // Setup hardware scaling with full D3D11 rendering
     bool setupHardwareScaling(int outW, int outH, int filter) {
         if (!device || !context) return false;
         
-        // Cleanup existing scaling resources
-        cleanupScalingResources();
+        // Cleanup existing scaling resources (inline to avoid visibility issues)
+        if (rasterState) { rasterState->Release(); rasterState = nullptr; }
+        if (vertexBuffer) { vertexBuffer->Release(); vertexBuffer = nullptr; }
+        if (inputLayout) { inputLayout->Release(); inputLayout = nullptr; }
+        if (pixelShader) { pixelShader->Release(); pixelShader = nullptr; }
+        if (vertexShader) { vertexShader->Release(); vertexShader = nullptr; }
+        if (sampler) { sampler->Release(); sampler = nullptr; }
+        if (rtv) { rtv->Release(); rtv = nullptr; }
+        if (srv) { srv->Release(); srv = nullptr; }
+        if (readbackTexture) { readbackTexture->Release(); readbackTexture = nullptr; }
+        if (scaledTexture) { scaledTexture->Release(); scaledTexture = nullptr; }
+        if (sourceTexture) { sourceTexture->Release(); sourceTexture = nullptr; }
+        useScaling = false;
         
         outputWidth = outW;
         outputHeight = outH;
@@ -307,21 +319,6 @@ private:
         
         printf("[DXGICapture] HARDWARE rendering setup complete!\n");
         return true;
-    }
-    
-    void cleanupScalingResources() {
-        if (rasterState) { rasterState->Release(); rasterState = nullptr; }
-        if (vertexBuffer) { vertexBuffer->Release(); vertexBuffer = nullptr; }
-        if (inputLayout) { inputLayout->Release(); inputLayout = nullptr; }
-        if (pixelShader) { pixelShader->Release(); pixelShader = nullptr; }
-        if (vertexShader) { vertexShader->Release(); vertexShader = nullptr; }
-        if (sampler) { sampler->Release(); sampler = nullptr; }
-        if (rtv) { rtv->Release(); rtv = nullptr; }
-        if (srv) { srv->Release(); srv = nullptr; }
-        if (readbackTexture) { readbackTexture->Release(); readbackTexture = nullptr; }
-        if (scaledTexture) { scaledTexture->Release(); scaledTexture = nullptr; }
-        if (sourceTexture) { sourceTexture->Release(); sourceTexture = nullptr; }
-        useScaling = false;
     }
     
 public:
