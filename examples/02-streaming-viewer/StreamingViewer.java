@@ -103,8 +103,10 @@ public class StreamingViewer extends JFrame {
     private void captureLoop() {
         long totalCaptureTime = 0;
         int captureCount = 0;
+        final long TARGET_FRAME_TIME = 16; // ~60 FPS (16ms per frame)
         
         while (running) {
+            long frameStart = System.currentTimeMillis();
             long startTime = System.nanoTime();
             
             // Get frame from FastScreen
@@ -134,10 +136,14 @@ public class StreamingViewer extends JFrame {
                 // Update display on EDT
                 final int[] framePixels = pixels;
                 SwingUtilities.invokeLater(() -> capturePanel.updateFrame(framePixels));
-            } else {
-                // No new frame, small sleep to prevent CPU spinning
+            }
+            
+            // Frame rate limiting - maintain steady 60 FPS
+            long frameEnd = System.currentTimeMillis();
+            long elapsed = frameEnd - frameStart;
+            if (elapsed < TARGET_FRAME_TIME) {
                 try {
-                    Thread.sleep(1);
+                    Thread.sleep(TARGET_FRAME_TIME - elapsed);
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                     break;
