@@ -1,5 +1,3 @@
-package fastscreen.examples;
-
 import fastscreen.FastScreen;
 import java.awt.AWTException;
 import java.awt.Rectangle;
