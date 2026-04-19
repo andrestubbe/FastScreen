@@ -118,13 +118,11 @@ public class StreamingViewer extends JFrame {
     private void captureLoop() {
         long totalCaptureTime = 0;
         int captureCount = 0;
-        final long TARGET_FRAME_TIME = 16; // ~60 FPS (16ms per frame)
         
         // Pre-allocate reusable array for zero-copy transfer
         int[] pixels = new int[frameWidth * frameHeight];
         
         while (running) {
-            long frameStart = System.currentTimeMillis();
             long startTime = System.nanoTime();
             
             // ZERO-COPY: Get frame as DirectByteBuffer (no array allocation!)
@@ -136,7 +134,6 @@ public class StreamingViewer extends JFrame {
                 captureCount++;
                 
                 // Convert DirectByteBuffer to int[] for display
-                // This is still needed for BufferedImage, but NO native-to-Java copy!
                 directBuffer.asIntBuffer().get(pixels);
                 
                 // Calculate stats every second
@@ -155,22 +152,13 @@ public class StreamingViewer extends JFrame {
                     SwingUtilities.invokeLater(this::updateStats);
                 }
                 
-                // Update display on EDT
-                final int[] framePixels = pixels.clone(); // Clone for thread safety
-                SwingUtilities.invokeLater(() -> capturePanel.updateFrame(framePixels));
+                // Update display on EDT - use direct reference, NO clone!
+                SwingUtilities.invokeLater(() -> capturePanel.updateFrame(pixels));
             }
             
-            // Frame rate limiting - maintain steady 60 FPS
-            long frameEnd = System.currentTimeMillis();
-            long elapsed = frameEnd - frameStart;
-            if (elapsed < TARGET_FRAME_TIME) {
-                try {
-                    Thread.sleep(TARGET_FRAME_TIME - elapsed);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    break;
-                }
-            }
+            // NO FRAME LIMITING - capture as fast as possible!
+            // Small yield to prevent 100% CPU spin
+            Thread.yield();
         }
     }
     

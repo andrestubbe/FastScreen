@@ -44,3 +44,16 @@ native/x64/
 *.tmp
 screenshot_*.png
 frame_*.png
+
+# IntelliJ IDEA
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Release files (local only)
+RELEASE.txt
+RELEASEV*.md
+
+# TODO files (local only)
+TODO.md
