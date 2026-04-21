@@ -1,7 +1,28 @@
-/*
- * FastScreen - DXGI Desktop Duplication Implementation
+/**
+ * @file DXGICapture.cpp
+ * @brief DXGI Desktop Duplication implementation for hardware-accelerated capture
  * 
- * Hardware-accelerated screen capture using DirectX
+ * @details Implements DirectX 11 based screen capture using DXGI Desktop Duplication
+ * API. Provides GPU-accelerated texture capture, hardware scaling via shaders,
+ * and triple-buffered frame pooling for smooth streaming.
+ * 
+ * @par Architecture
+ * - D3D11 device creation with BGRA support
+ * - DXGI Output Duplication for frame acquisition
+ * - Staging texture for CPU readback
+ * - Hardware scaling with vertex/pixel shaders
+ * - Triple-buffered frame pool (eliminates allocations)
+ * 
+ * @par Hardware Scaling Pipeline
+ * 1. Desktop texture acquired via DXGI
+ * 2. Shader resource view created for source
+ * 3. Fullscreen quad render to scaled render target
+ * 4. BGRA→RGBA swizzle in pixel shader
+ * 5. Readback to CPU-accessible staging texture
+ * 
+ * @author FastJava Team
+ * @version 1.0.0
+ * @copyright MIT License
  */
 
 #include "fastscreen.h"

@@ -1,7 +1,20 @@
-/*
- * FastScreen - JNI Implementation
+/**
+ * @file fastscreen.cpp
+ * @brief FastScreen JNI Implementation - DXGI screen capture
  * 
- * High-performance Java screen capture using DXGI Desktop Duplication
+ * @details Implements hardware-accelerated screen capture using DXGI Desktop
+ * Duplication API. Provides both single-frame capture and continuous streaming
+ * modes with optional hardware scaling.
+ * 
+ * @par Implementation Notes
+ * - Uses global capture state for single-capture mode
+ * - Separate capture instance for streaming mode
+ * - Delegates to DXGICapture class for actual GPU operations
+ * - Zero-copy DirectByteBuffer support for streaming
+ * 
+ * @author FastJava Team
+ * @version 1.0.0
+ * @copyright MIT License
  */
 
 #include "fastscreen.h"
@@ -18,19 +31,32 @@ extern "C" {
     void dxgiDestroyCapture(void* capture);
 }
 
-// Global capture instance for single-capture mode
-static void* g_capture = nullptr;
-static int g_width = 0;
-static int g_height = 0;
+/// @name Global State
+/// @brief Global capture state for single-frame mode
+/// @{
+static void* g_capture = nullptr;      /**< DXGI capture instance (single mode) */
+static int g_width = 0;                /**< Capture width in pixels */
+static int g_height = 0;               /**< Capture height in pixels */
+/// @}
 
-// Streaming state
-static void* g_streamCapture = nullptr;
-static int g_streamX = 0;
-static int g_streamY = 0;
-static int g_streamWidth = 0;
-static int g_streamHeight = 0;
-static bool g_streaming = false;
+/// @name Streaming State
+/// @brief Separate state for continuous streaming mode
+/// @{
+static void* g_streamCapture = nullptr; /**< DXGI capture instance (streaming) */
+static int g_streamX = 0;               /**< Stream region X coordinate */
+static int g_streamY = 0;               /**< Stream region Y coordinate */
+static int g_streamWidth = 0;           /**< Stream region width */
+static int g_streamHeight = 0;          /**< Stream region height */
+static bool g_streaming = false;        /**< True if streaming is active */
+/// @}
 
+/**
+ * @brief Initialize native capture for full screen
+ * @param env JNI environment pointer
+ * @param obj Java FastScreen object
+ * @return jlong Native handle, or 0 on failure
+ * @note Creates global capture instance for primary monitor
+ */
 JNIEXPORT jlong JNICALL Java_fastscreen_FastScreen_nativeInit(JNIEnv* env, jobject obj) {
     printf("[FastScreen] Native initialization\n");
     
@@ -48,6 +74,16 @@ JNIEXPORT jlong JNICALL Java_fastscreen_FastScreen_nativeInit(JNIEnv* env, jobje
     return (jlong)g_capture;
 }
 
+/**
+ * @brief Initialize native capture for specific screen region
+ * @param env JNI environment pointer
+ * @param obj Java FastScreen object
+ * @param x Region X coordinate
+ * @param y Region Y coordinate
+ * @param w Region width
+ * @param h Region height
+ * @return jlong Native handle, or 0 on failure
+ */
 JNIEXPORT jlong JNICALL Java_fastscreen_FastScreen_nativeInitRegion(JNIEnv* env, jobject obj, jint x, jint y, jint w, jint h) {
     printf("[FastScreen] Native initialization region (%d,%d %dx%d)\n", x, y, w, h);
     
@@ -65,6 +101,16 @@ JNIEXPORT jlong JNICALL Java_fastscreen_FastScreen_nativeInitRegion(JNIEnv* env,
     return (jlong)g_capture;
 }
 
+/**
+ * @brief Capture single frame as RGBA int array
+ * @param env JNI environment pointer
+ * @param obj Java FastScreen object
+ * @param x Capture X offset
+ * @param y Capture Y offset
+ * @param width Capture width
+ * @param height Capture height
+ * @return jintArray RGBA pixel data, or null if no new frame
+ */
 JNIEXPORT jintArray JNICALL Java_fastscreen_FastScreen_nativeCaptureScreen(
     JNIEnv* env, jobject obj, 
     jint x, jint y, jint width, jint height) {
@@ -96,6 +142,16 @@ JNIEXPORT jintArray JNICALL Java_fastscreen_FastScreen_nativeCaptureScreen(
     return result;
 }
 
+/**
+ * @brief Start continuous streaming capture mode
+ * @param env JNI environment pointer
+ * @param obj Java FastScreen object
+ * @param x Stream region X
+ * @param y Stream region Y
+ * @param width Stream region width
+ * @param height Stream region height
+ * @return jboolean JNI_TRUE if streaming started
+ */
 JNIEXPORT jboolean JNICALL Java_fastscreen_FastScreen_nativeStartStream(
     JNIEnv* env, jobject obj,
     jint x, jint y, jint width, jint height) {
@@ -136,6 +192,12 @@ JNIEXPORT jboolean JNICALL Java_fastscreen_FastScreen_nativeStartStream(
     return JNI_TRUE;
 }
 
+/**
+ * @brief Get next frame from streaming capture (int array)
+ * @param env JNI environment pointer
+ * @param obj Java FastScreen object
+ * @return jintArray RGBA pixel data, or null if no new frame
+ */
 JNIEXPORT jintArray JNICALL Java_fastscreen_FastScreen_nativeGetNextFrame(JNIEnv* env, jobject obj) {
     if (!g_streaming || !g_streamCapture) {
         return nullptr;
@@ -162,7 +224,13 @@ JNIEXPORT jintArray JNICALL Java_fastscreen_FastScreen_nativeGetNextFrame(JNIEnv
     return result;
 }
 
-// ZERO-COPY: DirectByteBuffer version - NO array copying!
+/**
+ * @brief Get next frame as DirectByteBuffer (zero-copy)
+ * @param env JNI environment pointer
+ * @param obj Java FastScreen object
+ * @return jobject DirectByteBuffer pointing to native pixel data
+ * @note Zero-copy: Java can read directly from native memory
+ */
 JNIEXPORT jobject JNICALL Java_fastscreen_FastScreen_nativeGetNextFrameDirect(JNIEnv* env, jobject obj) {
     if (!g_streaming || !g_streamCapture) {
         return nullptr;
@@ -181,6 +249,11 @@ JNIEXPORT jobject JNICALL Java_fastscreen_FastScreen_nativeGetNextFrameDirect(JN
     return env->NewDirectByteBuffer(pixels, width * height * 4);
 }
 
+/**
+ * @brief Stop streaming capture mode
+ * @param env JNI environment pointer
+ * @param obj Java FastScreen object
+ */
 JNIEXPORT void JNICALL Java_fastscreen_FastScreen_nativeStopStream(JNIEnv* env, jobject obj) {
     printf("[FastScreen] Stopping stream\n");
     
@@ -195,6 +268,15 @@ JNIEXPORT void JNICALL Java_fastscreen_FastScreen_nativeStopStream(JNIEnv* env, 
     g_streamHeight = 0;
 }
 
+/**
+ * @brief Configure hardware scaling for streaming
+ * @param env JNI environment pointer
+ * @param obj Java FastScreen object
+ * @param outW Output width
+ * @param outH Output height
+ * @param filter Filter mode (0=Point, 1=Linear)
+ * @return jboolean JNI_TRUE if scaling configured
+ */
 JNIEXPORT jboolean JNICALL Java_fastscreen_FastScreen_nativeSetupHardwareScaling(
     JNIEnv* env, jobject obj, jint outW, jint outH, jint filter) {
     
@@ -216,11 +298,17 @@ JNIEXPORT jboolean JNICALL Java_fastscreen_FastScreen_nativeSetupHardwareScaling
     return success ? JNI_TRUE : JNI_FALSE;
 }
 
+/**
+ * @brief Get color of single pixel at coordinates
+ * @param env JNI environment pointer
+ * @param obj Java FastScreen object
+ * @param x Pixel X coordinate
+ * @param y Pixel Y coordinate
+ * @return jint RGBA color value
+ */
 JNIEXPORT jint JNICALL Java_fastscreen_FastScreen_nativeGetPixelColor(
     JNIEnv* env, jobject obj, jint x, jint y) {
     
-    // For single pixel, we could optimize with a smaller capture
-    // For now, use full frame capture
     if (!g_capture) {
         return 0;
     }
@@ -240,6 +328,12 @@ JNIEXPORT jint JNICALL Java_fastscreen_FastScreen_nativeGetPixelColor(
     return 0;
 }
 
+/**
+ * @brief Release all native resources
+ * @param env JNI environment pointer
+ * @param obj Java FastScreen object
+ * @param handle Native handle (unused)
+ */
 JNIEXPORT void JNICALL Java_fastscreen_FastScreen_nativeDispose(JNIEnv* env, jobject obj, jlong handle) {
     printf("[FastScreen] Disposing native resources\n");
     
@@ -253,9 +347,12 @@ JNIEXPORT void JNICALL Java_fastscreen_FastScreen_nativeDispose(JNIEnv* env, job
     }
 }
 
+/**
+ * @brief Get number of connected monitors
+ * @param env JNI environment pointer
+ * @param obj Java FastScreen object
+ * @return jint Number of monitors (currently returns 1)
+ */
 JNIEXPORT jint JNICALL Java_fastscreen_FastScreen_nativeGetMonitorCount(JNIEnv* env, jobject obj) {
-    // Enumerate DXGI adapters and outputs
-    // For now, return 1 (primary monitor)
-    // TODO: Implement full enumeration
     return 1;
 }
