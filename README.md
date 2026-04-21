@@ -149,31 +149,14 @@ fastscreen/
 │   ├── fastscreen.cpp            # JNI wrapper
 │   └── DXGICapture.cpp           # DirectX capture
 ├── pom.xml                       # Maven configuration
-├── README.md                     # This file
-└── COMPILE.md                    # Build instructions
+└── README.md                     # This file
 ```
 
 ---
 
-## Building from Source
+## Build from Source
 
-### Prerequisites
-- JDK 17+
-- Maven 3.9+
-- Visual Studio 2019+ (for native DLL)
-- Windows 10/11 SDK
-
-### Build
-```bash
-git clone https://github.com/andrestubbe/fastscreen.git
-cd fastscreen
-
-# Build Java + native DLL
-mvn clean compile
-
-# Create JAR with native libraries
-mvn package
-```
+See [COMPILE.md](COMPILE.md) for detailed build instructions.
 
 ---
 
