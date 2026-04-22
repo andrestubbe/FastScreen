@@ -1,4 +1,4 @@
-# FastScreen — High-performance screen capture for Java
+# FastScreen — High-performance screen capture for Java [ALPHA]
 
 **⚡ Ultra-fast Java screen capture library — 500-2000 FPS zero-copy capture**
 
