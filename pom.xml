@@ -6,8 +6,10 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>com.github.andrestubbe</groupId>
-    <artifactId>fastscreen</artifactId>
-    <version>1.0.0-SNAPSHOT</version>
+            <artifactId>fastscreen</artifactId>
+           <version>0.1.0</version>
+     <version>0.1.0</version>
+     <version>0.1.0</version>
     <packaging>jar</packaging>
 
     <name>FastScreen</name>
@@ -53,7 +55,7 @@
         <dependency>
             <groupId>com.github.andrestubbe</groupId>
             <artifactId>fastcore</artifactId>
-            <version>${fastcore.version}</version>
+            <version>0.1.0</version>
         </dependency>
 
         <!-- JUnit for testing -->

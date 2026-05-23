@@ -5,13 +5,13 @@
                              http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>fastscreen.examples</groupId>
-    <artifactId>smoke-test</artifactId>
-    <version>1.0.0</version>
+    <groupId>com.github.andrestubbe</groupId>
+    <artifactId>fastscreen-demo</artifactId>
+    <version>0.1.0</version>
     <packaging>jar</packaging>
 
-    <name>FastScreen Smoke Test</name>
-    <description>Basic functionality verification test - uses local FastScreen from parent project</description>
+    <name>FastScreen Demo</name>
+    <description>Demo application for FastScreen</description>
 
     <properties>
         <maven.compiler.source>17</maven.compiler.source>
@@ -27,22 +27,36 @@
     </repositories>
 
     <dependencies>
-        <!-- FastCore from JitPack (required for JNI loading) -->
         <dependency>
             <groupId>com.github.andrestubbe</groupId>
             <artifactId>fastcore</artifactId>
-            <version>1.0.0</version>
+            <version>0.1.0</version>
+        </dependency>
+        <dependency>
+            <groupId>com.github.andrestubbe</groupId>
+            <artifactId>fastscreen</artifactId>
+            <version>0.1.0</version>
         </dependency>
     </dependencies>
-    
+
     <build>
+        <sourceDirectory>src/main/java</sourceDirectory>
         <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.11.0</version>
+                <configuration>
+                    <source>17</source>
+                    <target>17</target>
+                </configuration>
+            </plugin>
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>exec-maven-plugin</artifactId>
                 <version>3.1.0</version>
                 <configuration>
-                    <mainClass>fastscreen.examples.SmokeTest</mainClass>
+                    <mainClass>fastscreen.examples.BasicCaptureDemo</mainClass>
                 </configuration>
             </plugin>
         </plugins>

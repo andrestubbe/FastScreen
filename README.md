@@ -1,5 +1,4 @@
-# FastScreen — High-performance screen capture for Java
-
+# FastScreen — High-performance screen capture for Java [ALPHA] - v0.1.0
 **⚡ Ultra-fast Java screen capture library — 500-2000 FPS zero-copy capture**
 
 [![Build](https://img.shields.io/badge/build-passing-brightgreen.svg)]()
@@ -52,7 +51,7 @@ dependencies {
 - [fastcore-1.0.0.jar](https://github.com/andrestubbe/FastCore/releases/download/v1.0.0/fastcore-1.0.0.jar) — JNI loader (required dependency)
 
 ```bash
-# Run with both JARs
+# Run with both JARs [ALPHA] - v0.1.0
 java -cp "fastscreen-1.0.0.jar:fastcore-1.0.0.jar:." YourApp
 ```
 
@@ -124,11 +123,11 @@ See [examples/03-benchmark](examples/03-benchmark) for detailed measurement.
 All examples are in the `examples/` folder:
 
 ```bash
-# Basic screenshot demo
+# Basic screenshot demo [ALPHA] - v0.1.0
 cd examples/00-basic-capture
 mvn compile exec:java
 
-# High-FPS streaming demo
+# High-FPS streaming demo [ALPHA] - v0.1.0
 cd examples/01-streaming
 cd examples/02-vision-pipeline
 ```
@@ -245,3 +244,4 @@ MIT License — See [LICENSE](LICENSE) for details.
 
 **Part of the FastJava Ecosystem** — *[github.com/andrestubbe](https://github.com/andrestubbe)*  
 *Making the JVM faster through native acceleration.*
+
