@@ -19,8 +19,10 @@ If you need **high-FPS screen capture** without the 50-100ms latency of `java.aw
 
 ### Installation
 
-**Maven:**
-```xml
+### Option 1: Maven (Recommended)
+Add the JitPack repository and the dependencies to your `pom.xml`:
+
+`xml
 <repositories>
     <repository>
         <id>jitpack.io</id>
@@ -28,65 +30,43 @@ If you need **high-FPS screen capture** without the 50-100ms latency of `java.aw
     </repository>
 </repositories>
 
-<dependency>
-    <groupId>com.github.andrestubbe</groupId>
-    <artifactId>fastscreen</artifactId>
-    <version>v1.0.0</version>
-</dependency>
-```
+<dependencies>
+    <!-- FastScreen Library -->
+    <dependency>
+        <groupId>com.github.andrestubbe</groupId>
+        <artifactId>fastscreen</artifactId>
+        <version>v0.1.0</version>
+    </dependency>
+    <!-- FastCore (Required Native Loader) -->
+    <dependency>
+        <groupId>com.github.andrestubbe</groupId>
+        <artifactId>fastcore</artifactId>
+        <version>v0.1.0</version>
+    </dependency>
+</dependencies>
+`
 
-**Gradle:**
-```groovy
+### Option 2: Gradle (via JitPack)
+`groovy
 repositories {
     maven { url 'https://jitpack.io' }
 }
 
 dependencies {
-    implementation 'com.github.andrestubbe:fastscreen:v1.0.0'
+    implementation 'com.github.andrestubbe:.1.0'
+    implementation 'com.github.andrestubbe:fastcore:v0.1.0'
 }
-```
+`
 
-**Direct Download (both required):**
-- [fastscreen-1.0.0.jar](https://github.com/andrestubbe/FastScreen/releases/download/v1.0.0/fastscreen-1.0.0.jar) — Main library with DLL
-- [fastcore-1.0.0.jar](https://github.com/andrestubbe/FastCore/releases/download/v1.0.0/fastcore-1.0.0.jar) — JNI loader (required dependency)
+### Option 3: Direct Download (No Build Tool)
+Download the latest JARs directly to add them to your classpath:
 
-```bash
-# Run with both JARs [ALPHA] - v0.1.0
-java -cp "fastscreen-1.0.0.jar:fastcore-1.0.0.jar:." YourApp
-```
+1. 📦 **[fastscreen-v0.1.0.jar](https://github.com/andrestubbe/FastScreen/releases/download/v0.1.0/fastscreen-v0.1.0.jar)** (The Core Library)
+2. ⚙️ **[fastcore-v0.1.0.jar](https://github.com/andrestubbe/FastCore/releases/download/v0.1.0/fastcore-v0.1.0.jar)** (The Mandatory Native Loader)
 
-### Basic Usage
+> [!IMPORTANT]
+> All JARs must be in your classpath for the native JNI calls to function correctly.
 
-```java
-import fastscreen.FastScreen;
-import java.awt.Rectangle;
-import java.awt.image.BufferedImage;
-
-FastScreen screen = new FastScreen();
-
-// Single screenshot - 10-17× faster than Robot
-BufferedImage screenshot = screen.captureScreen(new Rectangle(0, 0, 1920, 1080));
-
-// Or get raw pixel array (zero-copy)
-int[] pixels = screen.captureRaw(0, 0, 1920, 1080);
-```
-
-### High-FPS Streaming
-
-```java
-// Start 60fps-240fps streaming capture
-screen.startStream(0, 0, 1920, 1080);
-
-while (true) {
-    if (screen.hasNewFrame()) {
-        int[] pixels = screen.getNextFrame(); // RGBA pixel array
-        double fps = screen.getStreamFPS();
-        System.out.println("Streaming at " + fps + " FPS");
-    }
-}
-```
-
----
 
 ## Key Features
 
