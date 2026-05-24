@@ -1,17 +1,19 @@
-﻿# FastScreen — High-performance screen capture for Java [ALPHA] - v0.1.0
+﻿# FastScreen  v0.1.0 [ALPHA] — High-performance screen capture for Java
+
 **⚡ Ultra-fast Java screen capture library — 500-2000 FPS zero-copy capture**
-
-**Keywords:** fastjava, java screen capture, java screenshot, directx screen capture, dxgi desktop duplication, zero copy capture, high fps screen capture, java vision, computer vision java, gpu screen capture
-
-FastScreen is a **high-performance Java screen capture library** and part of the **FastJava ecosystem**. It uses **DXGI Desktop Duplication API** for **zero-copy, hardware-accelerated screen capture** at 500-2000 FPS. Built for **computer vision**, **gaming bots**, **screen recording**, and **real-time monitoring** applications.
-
-If you need **high-FPS screen capture** without the 50-100ms latency of `java.awt.Robot`, FastScreen delivers native-level performance with Java simplicity. Part of the FastJava ecosystem — *Making the JVM faster.*
 
 [![Status](https://img.shields.io/badge/status-v0.1.0-brightgreen.svg)](https://github.com/andrestubbe/FastScreen/releases/tag/v0.1.0)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Java](https://img.shields.io/badge/Java-17+-blue.svg)](https://www.java.com)
 [![Platform](https://img.shields.io/badge/Platform-Windows%2010+-lightgrey.svg)]()
 [![JitPack](https://img.shields.io/badge/JitPack-ready-green.svg)](https://jitpack.io/#andrestubbe)
+
+[![FastKeyboard Showcase](docs/screenshot.png)](https://www.youtube.com/watch?v=BZsqQl7WqWk)
+
+FastScreen is a **high-performance Java screen capture library** and part of the **FastJava ecosystem**. It uses **DXGI Desktop Duplication API** for **zero-copy, hardware-accelerated screen capture** at 500-2000 FPS. Built for **computer vision**, **gaming bots**, **screen recording**, and **real-time monitoring** applications.
+
+If you need **high-FPS screen capture** without the 50-100ms latency of `java.awt.Robot`, FastScreen delivers native-level performance with Java simplicity. Part of the FastJava ecosystem — *Making the JVM faster.*
+
 
 ---
 
@@ -104,11 +106,13 @@ See [examples/03-benchmark](examples/03-benchmark) for detailed measurement.
 All examples are in the `examples/` folder:
 
 ```bash
-# Basic screenshot demo [ALPHA] - v0.1.0
+# Basic screenshot demo
+ [ALPHA] - v0.1.0
 cd examples/00-basic-capture
 mvn compile exec:java
 
-# High-FPS streaming demo [ALPHA] - v0.1.0
+# High-FPS streaming demo
+ [ALPHA] - v0.1.0
 cd examples/01-streaming
 cd examples/02-vision-pipeline
 ```
@@ -216,13 +220,17 @@ MIT License — free for commercial and private use. See [LICENSE](LICENSE) for 
 ---
 
 ## License
-
-MIT License — See [LICENSE](LICENSE) for details.
+MIT License — See [LICENSE](LICENSE) file for details.
 
 ---
 
-**FastScreen** — *High-performance Java screen capture.*
+## Related Projects
+- [FastCore](https://github.com/andrestubbe/FastCore) — Native Library Loader for Java
+- [FastKeyboard](https://github.com/andrestubbe/FastKeyboard) — High-performance RawInput engine
+- [FastTheme](https://github.com/andrestubbe/FastTheme) — Advanced UI styling engine
 
-**Part of the FastJava Ecosystem** — *[github.com/andrestubbe](https://github.com/andrestubbe)*  
-*Making the JVM faster through native acceleration.*
+---
+**Part of the FastJava Ecosystem** — *Making the JVM faster.*
+
+
 
