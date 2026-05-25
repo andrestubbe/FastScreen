@@ -1,5 +1,11 @@
 ﻿# FastScreen  v0.1.0 [ALPHA] — High-performance screen capture for Java
 
+[![Status](https://img.shields.io/badge/status-v0.1.0-brightgreen.svg)](https://github.com/andrestubbe/FastScreen/releases/tag/v0.1.0)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Java](https://img.shields.io/badge/Java-17+-blue.svg)](https://www.java.com)
+[![Platform](https://img.shields.io/badge/Platform-Windows%2010+-lightgrey.svg)]()
+[![JitPack](https://img.shields.io/badge/JitPack-ready-green.svg)](https://jitpack.io/#andrestubbe)
+
 **⚡ Ultra-fast Java screen capture library — 500-2000 FPS zero-copy capture**
 
 FastScreen is a **high-performance Java screen capture library** and part of the **FastJava ecosystem**. It uses **DXGI
@@ -9,15 +15,7 @@ vision**, **gaming bots**, **screen recording**, and **real-time monitoring** ap
 If you need **high-FPS screen capture** without the 50-100ms latency of `java.awt.Robot`, FastScreen delivers
 native-level performance with Java simplicity. Part of the FastJava ecosystem — *Making the JVM faster.*
 
-[![Status](https://img.shields.io/badge/status-v0.1.0-brightgreen.svg)](https://github.com/andrestubbe/FastScreen/releases/tag/v0.1.0)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Java](https://img.shields.io/badge/Java-17+-blue.svg)](https://www.java.com)
-[![Platform](https://img.shields.io/badge/Platform-Windows%2010+-lightgrey.svg)]()
-[![JitPack](https://img.shields.io/badge/JitPack-ready-green.svg)](https://jitpack.io/#andrestubbe)
-
 [![FastKeyboard Showcase](docs/screenshot.png)](https://www.youtube.com/watch?v=BZsqQl7WqWk)
-
-
 
 ---
 
@@ -56,7 +54,6 @@ public class Demo {
 
 ---
 
-
 ## Installation
 
 ### Option 1: Maven (Recommended)
@@ -73,14 +70,11 @@ Add the JitPack repository and the dependencies to your `pom.xml`:
 </repositories>
 
 <dependencies>
-<!-- FastScreen Library -->
 <dependency>
     <groupId>com.github.andrestubbe</groupId>
     <artifactId>fastscreen</artifactId>
     <version>v0.1.0</version>
 </dependency>
-
-<!-- FastCore (Required Native Loader) -->
 <dependency>
     <groupId>com.github.andrestubbe</groupId>
     <artifactId>fastcore</artifactId>
@@ -110,9 +104,6 @@ Download the latest JARs directly to add them to your classpath:
    ** (The Core Library)
 2. ⚙️ **[fastcore-v0.1.0.jar](https://github.com/andrestubbe/FastCore/releases/download/v0.1.0/fastcore-v0.1.0.jar)** (
    The Mandatory Native Loader)
-
-> [!IMPORTANT]
-> All JARs must be in your classpath for the native JNI calls to function correctly.
 
 ## Performance Benchmarks
 
@@ -151,31 +142,6 @@ cd examples/02-vision-pipeline
 
 ---
 
-## Project Structure
-
-```
-fastscreen/
-├── src/main/java/fastscreen/     # Main API
-│   └── FastScreen.java           # Core capture class
-├── examples/                     # Runnable examples
-│   ├── 00-basic-capture/         # Simple screenshot
-│   ├── 01-streaming/             # High-FPS demo
-│   └── 02-vision-pipeline/       # CV integration
-├── native/                       # C++ JNI source
-│   ├── fastscreen.cpp            # JNI wrapper
-│   └── DXGICapture.cpp           # DirectX capture
-├── pom.xml                       # Maven configuration
-└── README.md                     # This file
-```
-
----
-
-## Build from Source
-
-See [COMPILE.md](COMPILE.md) for detailed build instructions.
-
----
-
 ## API Reference
 
 ### Screen Capture
@@ -211,47 +177,24 @@ Native Layer (C++/Win32)
 Windows OS (Hardware)
 ```
 
-**Powered by [FastCore](https://github.com/andrestubbe/FastCore)** — Unified JNI loader for the FastJava ecosystem.
+---
+
+## Documentation
+
+* **[PHILOSOPHIE.md](PHILOSOPHIE.md)**: The engineering rationale for zero-allocation performance.
+* **[ROADMAP.md](ROADMAP.md)**: Future milestones and planned features.
+* **[REFERENCE.md](REFERENCE.md)**: Full API descriptions, border configurations, and codepoint index.
+* **[COMPILE.md](COMPILE.md)**: Full compilation guide (MSVC C++17 build chain + JNI Setup).
 
 ---
 
 ## Platform Support
 
-| Platform   | Status                  |
-|------------|-------------------------|
-| Windows 11 | ✅ Full support          |
-| Windows 10 | ✅ Full support          |
-| Linux      | ❌ Not planned (no DXGI) |
-| macOS      | ❌ Not planned (no DXGI) |
-
----
-
-## Version History
-
-### v1.0.0 — Current
-
-- **DXGI Desktop Duplication API** — hardware-accelerated capture
-- **Zero-copy streaming** — 500-2000 FPS
-- **FastCore integration** — Unified JNI loader
-- **Multiple output formats** — BufferedImage, raw pixels
-
----
-
-## License
-
-MIT License — free for commercial and private use. See [LICENSE](LICENSE) for details.
-
----
-
-## Part of FastJava Ecosystem
-
-| Module           | Purpose             | Link                                                  |
-|------------------|---------------------|-------------------------------------------------------|
-| **FastCore**     | JNI loader          | [GitHub](https://github.com/andrestubbe/FastCore)     |
-| **FastRobot**    | Input automation    | [GitHub](https://github.com/andrestubbe/FastRobot)    |
-| **FastVision**   | GPU vision pipeline | [GitHub](https://github.com/andrestubbe/FastVision)   |
-| **FastImage**    | Image processing    | [GitHub](https://github.com/andrestubbe/FastImage)    |
-| **FastGraphics** | GPU rendering       | [GitHub](https://github.com/andrestubbe/FastGraphics) |
+| Platform      | Status            |
+|---------------|-------------------|
+| Windows 10/11 | ✅ Fully Supported |
+| Linux         | 🚧 Planned        |
+| macOS         | 🚧 Planned        |
 
 ---
 
