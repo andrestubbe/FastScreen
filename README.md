@@ -2,6 +2,13 @@
 
 **⚡ Ultra-fast Java screen capture library — 500-2000 FPS zero-copy capture**
 
+FastScreen is a **high-performance Java screen capture library** and part of the **FastJava ecosystem**. It uses **DXGI
+Desktop Duplication API** for **zero-copy, hardware-accelerated screen capture** at 500-2000 FPS. Built for **computer
+vision**, **gaming bots**, **screen recording**, and **real-time monitoring** applications.
+
+If you need **high-FPS screen capture** without the 50-100ms latency of `java.awt.Robot`, FastScreen delivers
+native-level performance with Java simplicity. Part of the FastJava ecosystem — *Making the JVM faster.*
+
 [![Status](https://img.shields.io/badge/status-v0.1.0-brightgreen.svg)](https://github.com/andrestubbe/FastScreen/releases/tag/v0.1.0)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Java](https://img.shields.io/badge/Java-17+-blue.svg)](https://www.java.com)
@@ -10,21 +17,54 @@
 
 [![FastKeyboard Showcase](docs/screenshot.png)](https://www.youtube.com/watch?v=BZsqQl7WqWk)
 
-FastScreen is a **high-performance Java screen capture library** and part of the **FastJava ecosystem**. It uses **DXGI Desktop Duplication API** for **zero-copy, hardware-accelerated screen capture** at 500-2000 FPS. Built for **computer vision**, **gaming bots**, **screen recording**, and **real-time monitoring** applications.
 
-If you need **high-FPS screen capture** without the 50-100ms latency of `java.awt.Robot`, FastScreen delivers native-level performance with Java simplicity. Part of the FastJava ecosystem — *Making the JVM faster.*
 
+---
+
+## Table of Contents
+
+- [Features](#features)
+- [Installation](#installation)
+- [License](#license)
 
 ---
 
 ## Quick Start
 
-### Installation
+```java
+import fastjson.FastJSON;
+import fastjson.FastJsonValue;
+
+public class Demo {
+    public static void main(String[] args) {
+        // TODO
+    }
+}
+```
+
+---
+
+## Key Features
+
+- **⚡ 500–2000 FPS capture** — Zero‑copy DXGI Desktop Duplication
+- **🚀 10–17× faster** than `java.awt.Robot` (8–16ms vs 50–100ms)
+- **🎮 Hardware acceleration** — GPU → CPU without memory copy
+- **🧼 Zero GC pressure** — Native buffers, reusable arrays
+- **📤 Multiple outputs** — `BufferedImage`, raw pixels, or stream callback
+- **🧩 Powered by FastCore** — Unified JNI loader for all FastJava modules
+- **📜 MIT licensed** — free for commercial use
+
+---
+
+
+## Installation
 
 ### Option 1: Maven (Recommended)
+
 Add the JitPack repository and the dependencies to your `pom.xml`:
 
 ```xml
+
 <repositories>
     <repository>
         <id>jitpack.io</id>
@@ -33,23 +73,24 @@ Add the JitPack repository and the dependencies to your `pom.xml`:
 </repositories>
 
 <dependencies>
-    <!-- FastScreen Library -->
-    <dependency>
-        <groupId>com.github.andrestubbe</groupId>
-        <artifactId>fastscreen</artifactId>
-        <version>v0.1.0</version>
-    </dependency>
+<!-- FastScreen Library -->
+<dependency>
+    <groupId>com.github.andrestubbe</groupId>
+    <artifactId>fastscreen</artifactId>
+    <version>v0.1.0</version>
+</dependency>
 
-    <!-- FastCore (Required Native Loader) -->
-    <dependency>
-        <groupId>com.github.andrestubbe</groupId>
-        <artifactId>fastcore</artifactId>
-        <version>v0.1.0</version>
-    </dependency>
+<!-- FastCore (Required Native Loader) -->
+<dependency>
+    <groupId>com.github.andrestubbe</groupId>
+    <artifactId>fastcore</artifactId>
+    <version>v0.1.0</version>
+</dependency>
 </dependencies>
 ```
 
 ### Option 2: Gradle (via JitPack)
+
 ```groovy
 repositories {
     maven { url 'https://jitpack.io' }
@@ -62,26 +103,16 @@ dependencies {
 ```
 
 ### Option 3: Direct Download (No Build Tool)
+
 Download the latest JARs directly to add them to your classpath:
 
-1. 📦 **[fastscreen-v0.1.0.jar](https://github.com/andrestubbe/FastScreen/releases/download/v0.1.0/fastscreen-v0.1.0.jar)** (The Core Library)
-2. ⚙️ **[fastcore-v0.1.0.jar](https://github.com/andrestubbe/FastCore/releases/download/v0.1.0/fastcore-v0.1.0.jar)** (The Mandatory Native Loader)
+1. 📦 **[fastscreen-v0.1.0.jar](https://github.com/andrestubbe/FastScreen/releases/download/v0.1.0/fastscreen-v0.1.0.jar)
+   ** (The Core Library)
+2. ⚙️ **[fastcore-v0.1.0.jar](https://github.com/andrestubbe/FastCore/releases/download/v0.1.0/fastcore-v0.1.0.jar)** (
+   The Mandatory Native Loader)
 
 > [!IMPORTANT]
 > All JARs must be in your classpath for the native JNI calls to function correctly.
-
-
-## Key Features
-
-- **500-2000 FPS capture** — Zero-copy DXGI Desktop Duplication
-- **10-17× faster** than `java.awt.Robot` (8-16ms vs 50-100ms)
-- **Hardware acceleration** — GPU to CPU without memory copy
-- **Zero GC pressure** — Native buffers, reusable arrays
-- **Multiple outputs** — BufferedImage, raw pixels, or stream callback
-- **Powered by FastCore** — Unified JNI loader for all FastJava modules
-- **MIT licensed** — free for commercial use
-
----
 
 ## Performance Benchmarks
 
@@ -93,6 +124,7 @@ mvn compile exec:java
 ```
 
 **Expected improvements** (your hardware may vary):
+
 - Single capture: **10-50× faster** than `java.awt.Robot`
 - Streaming: **60-240fps** depending on GPU and resolution
 - Zero GC pressure with native buffers
@@ -147,11 +179,13 @@ See [COMPILE.md](COMPILE.md) for detailed build instructions.
 ## API Reference
 
 ### Screen Capture
+
 - `captureScreen(Rectangle rect)` — BufferedImage screenshot
 - `captureRaw(int x, int y, int w, int h)` — Raw RGBA pixel array
 - `getPixelColor(int x, int y)` — Single pixel (fast)
 
 ### Streaming (High-FPS)
+
 - `startStream(int x, int y, int w, int h)` — Begin capture stream
 - `hasNewFrame()` — Check for new frame available
 - `getNextFrame()` — Get next frame (non-blocking)
@@ -159,6 +193,7 @@ See [COMPILE.md](COMPILE.md) for detailed build instructions.
 - `getStreamFPS()` — Current capture FPS
 
 ### Monitor Selection
+
 - `getMonitorCount()` — Number of displays
 - `captureMonitor(int index)` — Capture specific monitor
 
@@ -182,18 +217,19 @@ Windows OS (Hardware)
 
 ## Platform Support
 
-| Platform | Status |
-|----------|--------|
-| Windows 11 | ✅ Full support |
-| Windows 10 | ✅ Full support |
-| Linux | ❌ Not planned (no DXGI) |
-| macOS | ❌ Not planned (no DXGI) |
+| Platform   | Status                  |
+|------------|-------------------------|
+| Windows 11 | ✅ Full support          |
+| Windows 10 | ✅ Full support          |
+| Linux      | ❌ Not planned (no DXGI) |
+| macOS      | ❌ Not planned (no DXGI) |
 
 ---
 
 ## Version History
 
 ### v1.0.0 — Current
+
 - **DXGI Desktop Duplication API** — hardware-accelerated capture
 - **Zero-copy streaming** — 500-2000 FPS
 - **FastCore integration** — Unified JNI loader
@@ -209,22 +245,24 @@ MIT License — free for commercial and private use. See [LICENSE](LICENSE) for 
 
 ## Part of FastJava Ecosystem
 
-| Module | Purpose | Link |
-|--------|---------|------|
-| **FastCore** | JNI loader | [GitHub](https://github.com/andrestubbe/FastCore) |
-| **FastRobot** | Input automation | [GitHub](https://github.com/andrestubbe/FastRobot) |
-| **FastVision** | GPU vision pipeline | [GitHub](https://github.com/andrestubbe/FastVision) |
-| **FastImage** | Image processing | [GitHub](https://github.com/andrestubbe/FastImage) |
-| **FastGraphics** | GPU rendering | [GitHub](https://github.com/andrestubbe/FastGraphics) |
+| Module           | Purpose             | Link                                                  |
+|------------------|---------------------|-------------------------------------------------------|
+| **FastCore**     | JNI loader          | [GitHub](https://github.com/andrestubbe/FastCore)     |
+| **FastRobot**    | Input automation    | [GitHub](https://github.com/andrestubbe/FastRobot)    |
+| **FastVision**   | GPU vision pipeline | [GitHub](https://github.com/andrestubbe/FastVision)   |
+| **FastImage**    | Image processing    | [GitHub](https://github.com/andrestubbe/FastImage)    |
+| **FastGraphics** | GPU rendering       | [GitHub](https://github.com/andrestubbe/FastGraphics) |
 
 ---
 
 ## License
+
 MIT License — See [LICENSE](LICENSE) file for details.
 
 ---
 
 ## Related Projects
+
 - [FastCore](https://github.com/andrestubbe/FastCore) — Native Library Loader for Java
 - [FastKeyboard](https://github.com/andrestubbe/FastKeyboard) — High-performance RawInput engine
 - [FastTheme](https://github.com/andrestubbe/FastTheme) — Advanced UI styling engine
