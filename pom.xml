@@ -38,7 +38,7 @@
         <maven.compiler.source>17</maven.compiler.source>
         <maven.compiler.target>17</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <fastcore.version>1.0.0</fastcore.version>
+        <fastcore.version>0.1.0</fastcore.version>
     </properties>
 
     <repositories>
