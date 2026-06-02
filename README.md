@@ -181,10 +181,10 @@ Windows OS (Hardware)
 
 ## Documentation
 
-* **[PHILOSOPHIE.md](PHILOSOPHIE.md)**: The engineering rationale for zero-allocation performance.
-* **[ROADMAP.md](ROADMAP.md)**: Future milestones and planned features.
-* **[REFERENCE.md](REFERENCE.md)**: Full API descriptions, border configurations, and codepoint index.
-* **[COMPILE.md](COMPILE.md)**: Full compilation guide (MSVC C++17 build chain + JNI Setup).
+* **[PHILOSOPHIE.md](docs/PHILOSOPHIE.md)**: The engineering rationale for zero-allocation performance.
+* **[ROADMAP.md](docs/ROADMAP.md)**: Future milestones and planned features.
+* **[REFERENCE.md](docs/REFERENCE.md)**: Full API descriptions, border configurations, and codepoint index.
+* **[COMPILE.md](docs/COMPILE.md)**: Full compilation guide (MSVC C++17 build chain + JNI Setup).
 
 ---
 
