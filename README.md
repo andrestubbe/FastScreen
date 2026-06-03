@@ -1,4 +1,4 @@
-Ôªø# FastScreen  v0.1.0 [ALPHA] ‚Äî High-performance screen capture for Java
+# FastScreen  v0.1.0 [ALPHA] ó High-performance screen capture for Java
 
 [![Status](https://img.shields.io/badge/status-v0.1.0-brightgreen.svg)](https://github.com/andrestubbe/FastScreen/releases/tag/v0.1.0)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -6,14 +6,14 @@
 [![Platform](https://img.shields.io/badge/Platform-Windows%2010+-lightgrey.svg)]()
 [![JitPack](https://img.shields.io/badge/JitPack-ready-green.svg)](https://jitpack.io/#andrestubbe)
 
-**‚ö° Ultra-fast Java screen capture library ‚Äî 500-2000 FPS zero-copy capture**
+**? Ultra-fast Java screen capture library ó 500-2000 FPS zero-copy capture**
 
 FastScreen is a **high-performance Java screen capture library** and part of the **FastJava ecosystem**. It uses **DXGI
 Desktop Duplication API** for **zero-copy, hardware-accelerated screen capture** at 500-2000 FPS. Built for **computer
 vision**, **gaming bots**, **screen recording**, and **real-time monitoring** applications.
 
 If you need **high-FPS screen capture** without the 50-100ms latency of `java.awt.Robot`, FastScreen delivers
-native-level performance with Java simplicity. Part of the FastJava ecosystem ‚Äî *Making the JVM faster.*
+native-level performance with Java simplicity. Part of the FastJava ecosystem ó *Making the JVM faster.*
 
 [![FastKeyboard Showcase](docs/screenshot.png)](https://www.youtube.com/watch?v=BZsqQl7WqWk)
 
@@ -44,13 +44,13 @@ public class Demo {
 
 ## Key Features
 
-- **‚ö° 500‚Äì2000 FPS capture** ‚Äî Zero‚Äëcopy DXGI Desktop Duplication
-- **üöÄ 10‚Äì17√ó faster** than `java.awt.Robot` (8‚Äì16ms vs 50‚Äì100ms)
-- **üéÆ Hardware acceleration** ‚Äî GPU ‚Üí CPU without memory copy
-- **üßº Zero GC pressure** ‚Äî Native buffers, reusable arrays
-- **üì§ Multiple outputs** ‚Äî `BufferedImage`, raw pixels, or stream callback
-- **üß© Powered by FastCore** ‚Äî Unified JNI loader for all FastJava modules
-- **üìú MIT licensed** ‚Äî free for commercial use
+- **? 500ñ2000 FPS capture** ó Zero-copy DXGI Desktop Duplication
+- **?? 10ñ17◊ faster** than `java.awt.Robot` (8ñ16ms vs 50ñ100ms)
+- **?? Hardware acceleration** ó GPU ? CPU without memory copy
+- **?? Zero GC pressure** ó Native buffers, reusable arrays
+- **?? Multiple outputs** ó `BufferedImage`, raw pixels, or stream callback
+- **?? Powered by FastCore** ó Unified JNI loader for all FastJava modules
+- **?? MIT licensed** ó free for commercial use
 
 ---
 
@@ -100,14 +100,14 @@ dependencies {
 
 Download the latest JARs directly to add them to your classpath:
 
-1. üì¶ **[fastscreen-v0.1.0.jar](https://github.com/andrestubbe/FastScreen/releases/download/v0.1.0/fastscreen-v0.1.0.jar)
+1. ?? **[fastscreen-v0.1.0.jar](https://github.com/andrestubbe/FastScreen/releases/download/v0.1.0/fastscreen-v0.1.0.jar)
    ** (The Core Library)
-2. ‚öôÔ∏è **[fastcore-v0.1.0.jar](https://github.com/andrestubbe/FastCore/releases/download/v0.1.0/fastcore-v0.1.0.jar)** (
+2. ?? **[fastcore-v0.1.0.jar](https://github.com/andrestubbe/FastCore/releases/download/v0.1.0/fastcore-v0.1.0.jar)** (
    The Mandatory Native Loader)
 
 ## Performance Benchmarks
 
-**Measure yourself** ‚Äî run the included benchmark:
+**Measure yourself** ó run the included benchmark:
 
 ```bash
 cd examples/03-benchmark
@@ -116,7 +116,7 @@ mvn compile exec:java
 
 **Expected improvements** (your hardware may vary):
 
-- Single capture: **10-50√ó faster** than `java.awt.Robot`
+- Single capture: **10-50◊ faster** than `java.awt.Robot`
 - Streaming: **60-240fps** depending on GPU and resolution
 - Zero GC pressure with native buffers
 
@@ -146,22 +146,22 @@ cd examples/02-vision-pipeline
 
 ### Screen Capture
 
-- `captureScreen(Rectangle rect)` ‚Äî BufferedImage screenshot
-- `captureRaw(int x, int y, int w, int h)` ‚Äî Raw RGBA pixel array
-- `getPixelColor(int x, int y)` ‚Äî Single pixel (fast)
+- `captureScreen(Rectangle rect)` ó BufferedImage screenshot
+- `captureRaw(int x, int y, int w, int h)` ó Raw RGBA pixel array
+- `getPixelColor(int x, int y)` ó Single pixel (fast)
 
 ### Streaming (High-FPS)
 
-- `startStream(int x, int y, int w, int h)` ‚Äî Begin capture stream
-- `hasNewFrame()` ‚Äî Check for new frame available
-- `getNextFrame()` ‚Äî Get next frame (non-blocking)
-- `stopStream()` ‚Äî Stop and cleanup
-- `getStreamFPS()` ‚Äî Current capture FPS
+- `startStream(int x, int y, int w, int h)` ó Begin capture stream
+- `hasNewFrame()` ó Check for new frame available
+- `getNextFrame()` ó Get next frame (non-blocking)
+- `stopStream()` ó Stop and cleanup
+- `getStreamFPS()` ó Current capture FPS
 
 ### Monitor Selection
 
-- `getMonitorCount()` ‚Äî Number of displays
-- `captureMonitor(int index)` ‚Äî Capture specific monitor
+- `getMonitorCount()` ó Number of displays
+- `captureMonitor(int index)` ó Capture specific monitor
 
 ---
 
@@ -169,11 +169,11 @@ cd examples/02-vision-pipeline
 
 ```
 Java API (FastScreen.java)
-    ‚Üì JNI (via FastCore)
+    ? JNI (via FastCore)
 Native Layer (C++/Win32)
-    ‚îî‚îÄ‚îÄ DXGI Desktop Duplication API
-        ‚îî‚îÄ‚îÄ Direct GPU framebuffer access
-    ‚Üì
+    +-- DXGI Desktop Duplication API
+        +-- Direct GPU framebuffer access
+    ?
 Windows OS (Hardware)
 ```
 
@@ -181,7 +181,7 @@ Windows OS (Hardware)
 
 ## Documentation
 
-* **[PHILOSOPHIE.md](docs/PHILOSOPHIE.md)**: The engineering rationale for zero-allocation performance.
+* **[PHILOSOPHY.md](docs/PHILOSOPHY.md)**: The engineering rationale for zero-allocation performance.
 * **[ROADMAP.md](docs/ROADMAP.md)**: Future milestones and planned features.
 * **[REFERENCE.md](docs/REFERENCE.md)**: Full API descriptions, border configurations, and codepoint index.
 * **[COMPILE.md](docs/COMPILE.md)**: Full compilation guide (MSVC C++17 build chain + JNI Setup).
@@ -192,26 +192,26 @@ Windows OS (Hardware)
 
 | Platform      | Status            |
 |---------------|-------------------|
-| Windows 10/11 | ‚úÖ Fully Supported |
-| Linux         | üöß Planned        |
-| macOS         | üöß Planned        |
+| Windows 10/11 | ? Fully Supported |
+| Linux         | ?? Planned        |
+| macOS         | ?? Planned        |
 
 ---
 
 ## License
 
-MIT License ‚Äî See [LICENSE](LICENSE) file for details.
+MIT License ó See [LICENSE](LICENSE) file for details.
 
 ---
 
 ## Related Projects
 
-- [FastCore](https://github.com/andrestubbe/FastCore) ‚Äî Native Library Loader for Java
-- [FastKeyboard](https://github.com/andrestubbe/FastKeyboard) ‚Äî High-performance RawInput engine
-- [FastTheme](https://github.com/andrestubbe/FastTheme) ‚Äî Advanced UI styling engine
+- [FastCore](https://github.com/andrestubbe/FastCore) ó Native Library Loader for Java
+- [FastKeyboard](https://github.com/andrestubbe/FastKeyboard) ó High-performance RawInput engine
+- [FastTheme](https://github.com/andrestubbe/FastTheme) ó Advanced UI styling engine
 
 ---
-**Part of the FastJava Ecosystem** ‚Äî *Making the JVM faster. Small package. Maximum speed. Zero bloat. üöÄüìã*
+**Part of the FastJava Ecosystem** ó *Making the JVM faster. Small package. Maximum speed. Zero bloat. ????*
 
 
 
