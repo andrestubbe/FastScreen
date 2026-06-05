@@ -7,7 +7,7 @@
 
     <groupId>com.github.andrestubbe</groupId>
             <artifactId>fastscreen-demo</artifactId>
-            <version>0.1.0</version>
+            <version>v0.1.0</version>
     <packaging>jar</packaging>
 
     <name>FastScreen Demo</name>
@@ -29,13 +29,13 @@
     <dependencies>
         <dependency>
             <groupId>com.github.andrestubbe</groupId>
-            <artifactId>fastcore</artifactId>
-            <version>0.1.0</version>
+            <artifactId>FastCore</artifactId>
+            <version>v0.1.0</version>
         </dependency>
         <dependency>
             <groupId>com.github.andrestubbe</groupId>
-            <artifactId>fastscreen</artifactId>
-            <version>0.1.0</version>
+            <artifactId>FastScreen</artifactId>
+            <version>v0.1.0</version>
         </dependency>
     </dependencies>
 
