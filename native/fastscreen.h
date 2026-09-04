@@ -149,6 +149,16 @@ JNIEXPORT void JNICALL Java_fastscreen_FastScreen_nativeDispose(JNIEnv* env, job
 JNIEXPORT jint JNICALL Java_fastscreen_FastScreen_nativeGetMonitorCount(JNIEnv* env, jobject obj);
 
 /**
+ * @brief Get current frame width
+ */
+JNIEXPORT jint JNICALL Java_fastscreen_FastScreen_nativeGetFrameWidth(JNIEnv* env, jobject obj);
+
+/**
+ * @brief Get current frame height
+ */
+JNIEXPORT jint JNICALL Java_fastscreen_FastScreen_nativeGetFrameHeight(JNIEnv* env, jobject obj);
+
+/**
  * @brief Set window display affinity to exclude or include from screen capture
  * @param env JNI environment pointer
  * @param cls FastScreen Java class

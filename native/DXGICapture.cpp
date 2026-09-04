@@ -117,6 +117,13 @@ private:
     int* bufferPool[POOL_SIZE] = {nullptr, nullptr, nullptr};
     int poolIndex = 0;
     bool poolInitialized = false;
+
+    // High-speed Win32 GDI DIBSection fallback when DXGI is unavailable (e.g. non-interactive / headless / RDP)
+    bool useGdiFallback = false;
+    HDC hdcScreen = nullptr;
+    HDC hdcMem = nullptr;
+    HBITMAP hBitmap = nullptr;
+    void* gdiPixels = nullptr;
     
     bool createStagingTexture() {
         if (stagingTexture) {
@@ -127,6 +134,26 @@ private:
         // Use capture region size, not full monitor size
         int texWidth = (captureWidth > 0) ? captureWidth : width;
         int texHeight = (captureHeight > 0) ? captureHeight : height;
+
+        if (useGdiFallback) {
+            BITMAPINFO bmi = {};
+            bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+            bmi.bmiHeader.biWidth = texWidth;
+            bmi.bmiHeader.biHeight = -texHeight; // top-down
+            bmi.bmiHeader.biPlanes = 1;
+            bmi.bmiHeader.biBitCount = 32;
+            bmi.bmiHeader.biCompression = BI_RGB;
+            
+            hdcScreen = GetDC(NULL);
+            hdcMem = CreateCompatibleDC(hdcScreen);
+            hBitmap = CreateDIBSection(hdcMem, &bmi, DIB_RGB_COLORS, (void**)&gdiPixels, NULL, 0);
+            if (!hBitmap || !gdiPixels) {
+                printf("[DXGICapture] Failed to create GDI DIBSection (%dx%d)\n", texWidth, texHeight);
+                return false;
+            }
+            SelectObject(hdcMem, hBitmap);
+            return true;
+        }
         
         D3D11_TEXTURE2D_DESC desc = {};
         desc.Width = texWidth;
@@ -440,14 +467,9 @@ public:
         hr = dxgiOutput1->DuplicateOutput(device, &duplication);
         dxgiOutput1->Release();
         if (FAILED(hr)) {
-            if (hr == DXGI_ERROR_NOT_CURRENTLY_AVAILABLE) {
-                printf("[DXGICapture] Desktop Duplication already in use by another application\n");
-            } else if (hr == E_INVALIDARG || hr == 0x80070057) {
-                printf("[DXGICapture] Invalid parameter - virtual desktop or unsupported format\n");
-            } else {
-                printf("[DXGICapture] Failed to create duplication: 0x%08X\n", hr);
-            }
-            return false;
+            printf("[DXGICapture] DXGI Desktop Duplication unavailable (0x%08X). Activating high-performance Win32 GDI fallback...\n", hr);
+            useGdiFallback = true;
+            duplication = nullptr;
         }
         
         // Create staging texture for capture region size
@@ -479,6 +501,31 @@ public:
     }
     
     bool captureFrame(int** pixels, int* outWidth, int* outHeight) {
+        if (useGdiFallback) {
+            int outW = (captureWidth > 0) ? captureWidth : width;
+            int outH = (captureHeight > 0) ? captureHeight : height;
+            
+            BitBlt(hdcMem, 0, 0, outW, outH, hdcScreen, captureX, captureY, SRCCOPY | CAPTUREBLT);
+            
+            pixelBuffer = bufferPool[poolIndex];
+            poolIndex = (poolIndex + 1) % POOL_SIZE;
+            
+            int total = outW * outH;
+            BYTE* src = (BYTE*)gdiPixels;
+            for (int i = 0; i < total; i++) {
+                BYTE b = src[i * 4 + 0];
+                BYTE g = src[i * 4 + 1];
+                BYTE r = src[i * 4 + 2];
+                BYTE a = 0xFF;
+                pixelBuffer[i] = (a << 24) | (r << 16) | (g << 8) | b;
+            }
+            
+            *pixels = pixelBuffer;
+            *outWidth = outW;
+            *outHeight = outH;
+            return true;
+        }
+
         if (!duplication || !device || !context) {
             return false;
         }
@@ -683,14 +730,27 @@ public:
             device->Release();
             device = nullptr;
         }
+        if (hBitmap) {
+            DeleteObject(hBitmap);
+            hBitmap = nullptr;
+        }
+        if (hdcMem) {
+            DeleteDC(hdcMem);
+            hdcMem = nullptr;
+        }
+        if (hdcScreen) {
+            ReleaseDC(NULL, hdcScreen);
+            hdcScreen = nullptr;
+        }
+        gdiPixels = nullptr;
+        useGdiFallback = false;
         useScaling = false;
         width = 0;
         height = 0;
         bufferSize = 0;
     }
-    
-    int getWidth() const { return width; }
-    int getHeight() const { return height; }
+       int getWidth() const { return (outputWidth > 0) ? outputWidth : ((captureWidth > 0) ? captureWidth : width); }
+    int getHeight() const { return (outputHeight > 0) ? outputHeight : ((captureHeight > 0) ? captureHeight : height); }
 };
 
 // C interface for JNI
@@ -718,9 +778,18 @@ extern "C" {
     bool dxgiCaptureFrame(void* capture, int** pixels, int* width, int* height) {
         return static_cast<DXGICapture*>(capture)->captureFrame(pixels, width, height);
     }
+
+    int dxgiGetWidth(void* capture) {
+        if (!capture) return 0;
+        return static_cast<DXGICapture*>(capture)->getWidth();
+    }
+
+    int dxgiGetHeight(void* capture) {
+        if (!capture) return 0;
+        return static_cast<DXGICapture*>(capture)->getHeight();
+    }
     
     void dxgiDestroyCapture(void* capture) {
         delete static_cast<DXGICapture*>(capture);
     }
-    
 }

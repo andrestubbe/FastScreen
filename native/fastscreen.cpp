@@ -28,6 +28,8 @@ extern "C" {
     bool dxgiInitializeRegion(void* capture, int monitorIndex, int x, int y, int w, int h);
     bool dxgiSetupScaling(void* capture, int outW, int outH, int filter);
     bool dxgiCaptureFrame(void* capture, int** pixels, int* width, int* height);
+    int dxgiGetWidth(void* capture);
+    int dxgiGetHeight(void* capture);
     void dxgiDestroyCapture(void* capture);
 }
 
@@ -355,6 +357,18 @@ JNIEXPORT void JNICALL Java_fastscreen_FastScreen_nativeDispose(JNIEnv* env, job
  */
 JNIEXPORT jint JNICALL Java_fastscreen_FastScreen_nativeGetMonitorCount(JNIEnv* env, jobject obj) {
     return 1;
+}
+
+JNIEXPORT jint JNICALL Java_fastscreen_FastScreen_nativeGetFrameWidth(JNIEnv* env, jobject obj) {
+    if (g_streaming && g_streamCapture) return (jint)dxgiGetWidth(g_streamCapture);
+    if (g_capture) return (jint)dxgiGetWidth(g_capture);
+    return 0;
+}
+
+JNIEXPORT jint JNICALL Java_fastscreen_FastScreen_nativeGetFrameHeight(JNIEnv* env, jobject obj) {
+    if (g_streaming && g_streamCapture) return (jint)dxgiGetHeight(g_streamCapture);
+    if (g_capture) return (jint)dxgiGetHeight(g_capture);
+    return 0;
 }
 
 #ifndef WDA_NONE

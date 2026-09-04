@@ -1,24 +1,46 @@
 # FastScreen Roadmap 🗺️
 
-**Vision:** To provide the fastest possible native primitives for screen capture by aggressively bypassing bottlenecks in standard Java.
-
-## 🟢 v0.1.0: Initial Release (Current)
-- [x] **Core Native Engine**: Basic JNI implementation.
-- [x] **Blueprint Standards**: README, Reference, and Philosophy integration.
-- [ ] **Basic Performance Suite**: Initial benchmarks vs standard Java.
-
-## 🟡 v0.2.0: Optimization Phase
-- [ ] **SIMD Acceleration**: Implement AVX2/SSE4.2 paths for core loops.
-- [ ] **Software Prefetching**: Optimize memory access patterns.
-- [ ] **Alignment Enforcement**: Ensure zero-penalty memory boundaries.
-
-## 🟠 v0.5.0: Platform & Logic Expansion
-- [ ] **ARM NEON Port**: Parity for Apple Silicon/Mobile.
-- [ ] **Advanced Features**: Multi-threaded paths and complex batch operations.
-
-## 🔴 v1.0.0: Production Hardening
-- [ ] **Full Stability Audit**: Long-run stress testing.
-- [ ] **Enterprise Support**: NUMA-awareness and Large Pages support.
+**Vision:** To provide the fastest, zero-allocation native primitives for screen capture and live desktop ingestion in the Java ecosystem.
 
 ---
-**Focus:** Performance is our USP. We optimize where Java stops.
+
+## 🟢 v0.1.0: Core Engine Release (Completed)
+- [x] **DXGI Desktop Duplication**: DirectX 11 hardware-accelerated capture pipeline.
+- [x] **Zero-Copy Streaming**: `DirectByteBuffer` exposing native GPU staging memory.
+- [x] **Hardware Scaling**: HLSL vertex/pixel shader pipeline for GPU downsampling.
+- [x] **Native Frame Pooling**: Triple-buffering (`POOL_SIZE = 3`) with zero Java heap allocations.
+
+---
+
+## 🟢 v0.1.1: Window Exclusion & Resilient Fallback (Current)
+- [x] **Window Capture Exclusion**: Win32 `SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE)` (0x11).
+- [x] **Title-Based Exclusion**: Automatic top-level window search and affinity tagging.
+- [x] **GDI DIBSection Fallback**: Resilient fallback path for headless sessions, RDP, and VMs.
+- [x] **Dynamic Monitor Bounds**: Automatic resolution adaptation and safe dimension clamping.
+- [x] **Visual Studio 2026/2022 Auto-Detection**: Universal build automation via `vswhere.exe`.
+- [x] **Real-World Benchmark Verification**: 229.8 FPS measured streaming throughput.
+
+---
+
+## 🟡 v0.2.0: GPU-to-GPU Zero-Copy Interop
+- [ ] **Direct GPU-to-Vulkan Interop**: Windows Shared Surface Handle (`IDXGIResource::GetSharedHandle`) to import DXGI frames directly into Vulkan textures with 0 CPU readback.
+- [ ] **Hardware Mouse Cursor Compositing**: In-shader pointer composition support.
+- [ ] **Multi-Adapter Selection**: Explicit GPU adapter selection for hybrid laptops (iGPU vs dGPU).
+
+---
+
+## 🟠 v0.3.0: Windows Graphics Capture (WGC)
+- [ ] **Modern WinRT Capture API**: Targeted per-window capture mode (`GraphicsCaptureItem`).
+- [ ] **Capture Border Control**: Disable yellow capture border on Windows 11.
+- [ ] **HDR & 10-Bit Color**: `DXGI_FORMAT_R10G10B10A2_UNORM` support for HDR displays.
+
+---
+
+## 🔴 v1.0.0: Enterprise Production Hardening
+- [ ] **Audio Loopback Capture**: Integrated WASAPI desktop audio stream synchronization.
+- [ ] **Extended OS Parity**: Investigate Linux PipeWire / Wayland capture backends.
+- [ ] **Long-Run Telemetry & Stress Suite**: 48h soak testing with zero leaks.
+
+---
+
+**Part of the FastJava Ecosystem** — *Making the JVM faster. ⚡*

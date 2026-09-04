@@ -80,7 +80,6 @@ if errorlevel 1 (
     echo.
     echo [ERROR] Native compilation failed!
     cd /d "%~dp0"
-    pause
     exit /b 1
 )
 

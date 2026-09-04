@@ -21,7 +21,7 @@ public class FastScreenBenchmark {
     
     private static final int WARMUP_ITERATIONS = 10;
     private static final int BENCHMARK_ITERATIONS = 100;
-    private static final Rectangle TEST_RECT = new Rectangle(0, 0, 1920, 1080);
+    private static Rectangle TEST_RECT = new Rectangle(0, 0, 1920, 1080);
     
     public static void main(String[] args) {
         System.out.println("========================================");
@@ -34,6 +34,7 @@ public class FastScreenBenchmark {
             .getLocalGraphicsEnvironment().getDefaultScreenDevice();
         int screenWidth = gd.getDisplayMode().getWidth();
         int screenHeight = gd.getDisplayMode().getHeight();
+        TEST_RECT = new Rectangle(0, 0, screenWidth, screenHeight);
         System.out.println("Screen Resolution: " + screenWidth + "x" + screenHeight);
         System.out.println();
         
@@ -85,6 +86,7 @@ public class FastScreenBenchmark {
         
         // Calculate statistics
         printStats(times, "Robot");
+        robotAvg = calculateAverage(times);
         System.out.println();
     }
     
@@ -134,8 +136,8 @@ public class FastScreenBenchmark {
         System.out.println("----------------------------------------");
         
         FastScreen screen = new FastScreen();
-        int streamWidth = 1920;
-        int streamHeight = 1080;
+        int streamWidth = TEST_RECT.width;
+        int streamHeight = TEST_RECT.height;
         int durationMs = 5000; // 5 seconds
         
         System.out.println("Streaming " + streamWidth + "x" + streamHeight + " for " + (durationMs/1000) + " seconds...");

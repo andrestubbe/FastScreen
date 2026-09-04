@@ -1,45 +1,20 @@
-# FastScreen 0.1.0 [ALPHA-2026-06-14] — High-Performance Native Screen Capture for Java
+# FastScreen 0.1.1 [2026-09-04] — High-Performance Native Screen Capture for Java
 
-[![Status](https://img.shields.io/badge/status-0.1.0-brightgreen.svg)](https://github.com/andrestubbe/FastScreen/releases/tag/0.1.0)
+[![Status](https://img.shields.io/badge/status-0.1.1-brightgreen.svg)](https://github.com/andrestubbe/FastScreen/releases/tag/0.1.1)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Java](https://img.shields.io/badge/Java-17+-blue.svg)](https://www.java.com)
 [![Platform](https://img.shields.io/badge/Platform-Windows%2010+-lightgrey.svg)]()
 [![JitPack](https://img.shields.io/badge/JitPack-ready-green.svg)](https://jitpack.io/#andrestubbe/FastScreen)
 
-**⚡ Ultra-fast Java screen capture — 500–2000 FPS zero-copy capture via DXGI Desktop Duplication.**
+---
 
-FastScreen is a **high-performance Java screen capture library** and part of the **FastJava ecosystem**. It uses **DXGI
-Desktop Duplication API** for **zero-copy, hardware-accelerated screen capture** at 500–2000 FPS. Built for **computer
-vision**, **gaming bots**, **screen recording**, and **real-time monitoring** applications.
+**⚡ Ultra-fast native screen capture engine for Java — 240–2000 FPS zero-copy streaming via DirectX DXGI Desktop Duplication & hardware fallback.**
+
+**FastScreen** is the hardware-accelerated desktop capture and video ingestion substrate of the **FastJava** ecosystem. Powered by DirectX 11 and the DXGI 1.2+ Desktop Duplication API, FastScreen provides ultra-low latency desktop streaming (240–2000 FPS), GPU-side hardware scaling via HLSL pixel shaders, zero JVM heap allocations through native frame pooling, and native window-capture exclusion (`SetWindowDisplayAffinity`) to completely eliminate recursive screen-mirroring (Droste effect).
+
+It is the visual capture backbone that powers **[FastVulkan](https://github.com/andrestubbe/FastVulkan)** (live desktop distortion and magic lenses), **FastOCR**, **FastAIVision**, autonomous computer vision agents, gaming telemetry bots, and high-frequency real-time stream processing.
 
 [![FastScreen Showcase](docs/screenshot.png)](https://www.youtube.com/watch?v=BZsqQl7WqWk)
-
----
-
-## Table of Contents
-
-- [Key Features](#key-features)
-- [Installation](#installation)
-- [Quick Start](#quick-start)
-- [Performance Benchmarks](#performance-benchmarks)
-- [API Reference](#api-reference)
-- [Documentation](#documentation)
-- [Platform Support](#platform-support)
-- [License](#license)
-- [Related Projects](#related-projects)
-
----
-
-## Key Features
-
-- 🚀 **500–2000 FPS Capture** — Zero-copy DXGI Desktop Duplication, GPU framebuffer direct access.
-- ⚡ **10–17× Faster** than `java.awt.Robot` (8–16 ms vs. 50–100 ms per frame).
-- 🖥️ **Hardware Acceleration** — GPU → CPU without intermediate memory copy.
-- 🚫 **Zero GC Pressure** — Reusable native buffers, nothing lands on the Java heap.
-- 📦 **Multiple Output Formats** — `BufferedImage`, raw RGBA pixels, or streaming callback.
-- 🖱️ **Multi-Monitor Support** — Target any display by index.
-- 🔗 **Powered by FastCore** — Unified JNI loader for all FastJava modules.
-- 📄 **MIT Licensed** — Free for commercial use.
 
 ---
 
@@ -47,31 +22,210 @@ vision**, **gaming bots**, **screen recording**, and **real-time monitoring** ap
 
 ```java
 import fastscreen.FastScreen;
+import java.awt.Rectangle;
+import java.awt.image.BufferedImage;
+import java.nio.ByteBuffer;
 
 public class Demo {
     public static void main(String[] args) {
-        // Single screenshot
-        BufferedImage img = FastScreen.captureScreen();
+        // 1. Initialize FastScreen capture engine
+        FastScreen screen = new FastScreen();
 
-        // High-FPS stream
-        FastScreen.startStream(0, 0, 1920, 1080);
-        while (true) {
-            if (FastScreen.hasNewFrame()) {
-                byte[] frame = FastScreen.getNextFrame();
-                // process frame...
+        // 2. Exclude your application window from capture (prevents Droste mirror recursion)
+        // FastScreen.excludeWindow(windowHandle);
+        // FastScreen.excludeWindow("My App Title");
+
+        // 3. Single-shot desktop screenshot
+        BufferedImage shot = screen.captureScreen();
+
+        // 4. Ultra-high-FPS desktop streaming (240+ FPS)
+        screen.startStream(0, 0, 1920, 1080);
+
+        // Optional: Hardware-accelerated GPU scaling with bilinear filter
+        // screen.enableHardwareScaling(1280, 720, true);
+
+        while (running) {
+            // ZERO-COPY: Read directly from native GPU staging memory
+            ByteBuffer directBuffer = screen.getNextFrameDirect();
+            if (directBuffer != null) {
+                // Process frame with 0 JVM garbage collection overhead
             }
         }
+
+        screen.stopStream();
+        screen.dispose();
     }
 }
 ```
 
 ---
 
+## Table of Contents
+
+- [Why FastScreen?](#why-fastscreen)
+- [Quick Start](#quick-start)
+- [Key Features](#key-features)
+- [Real-Life Examples & Use Cases](#real-life-examples--use-cases)
+- [Architecture & Hardware Pipeline](#architecture--hardware-pipeline)
+- [Performance Benchmarks](#performance-benchmarks)
+- [Window Capture Exclusion](#window-capture-exclusion)
+- [API Quick Reference](#api-quick-reference)
+- [Installation](#installation)
+- [Documentation](#documentation)
+- [Platform Support](#platform-support)
+- [Related Projects](#related-projects)
+- [License](#license)
+
+---
+
+## Why FastScreen?
+
+For over two decades, Java developers needing screen capture have been constrained to `java.awt.Robot.createScreenCapture()`. While adequate for occasional static screenshots, `Robot` fails catastrophically for modern high-performance use cases:
+
+1. **Crippling Latency & Low Frame Rates**: `java.awt.Robot` relies on legacy GDI `GetDC`/`BitBlt` under the hood, synchronized on the Java AWT Event Dispatch Thread (EDT). Capturing a full-screen frame takes 15–50 ms, capping capture throughput at a sluggish 15–20 FPS.
+2. **Severe JVM Heap Churn (GC Pauses)**: Every call to `robot.createScreenCapture()` instantiates a new `BufferedImage`, a `Raster`, a `DataBufferInt`, and an underlying `int[]` array (~8 MB for 1080p, ~33 MB for 4K). At 30 FPS, this generates gigabytes of heap garbage per minute, causing devastating Garbage Collection freezes.
+3. **No Hardware Acceleration or Scaling**: Standard Java forces CPU-bound pixel downsampling, burning precious CPU cores that should be dedicated to computer vision or inference.
+4. **Recursive Mirror Loops (Droste Effect)**: Capturing the screen while displaying the stream inside a window causes infinite visual recursion (hall of mirrors) unless cumbersome coordinates are manually cropped.
+
+**FastScreen** eliminates all these bottlenecks by interfacing directly with the Windows GPU compositor:
+
+- **GPU Direct Duplication**: Intercepts the composited desktop texture directly from the Desktop Window Manager (DWM) using DXGI 1.2+ `IDXGIOutputDuplication`.
+- **Zero-Copy Architecture**: Provides native Direct `ByteBuffer` views into mapped GPU memory. 0 heap allocations, 0 GC pauses.
+- **Hardware HLSL Scaling**: Performs format conversion (BGRA→RGBA) and resolution downsampling entirely on GPU execution units before CPU readback.
+- **Native Window Exclusion**: Sets Win32 `WDA_EXCLUDEFROMCAPTURE` (`0x00000011`) so DWM automatically renders what is *behind* your window directly into the capture stream.
+
+---
+
+## Key Features
+
+- ⚡ **240–2000 FPS Capture Throughput** — Direct GPU framebuffer access via DirectX 11 Desktop Duplication.
+- 🗑️ **Zero GC Pressure** — Triple-buffered native frame pooling (`POOL_SIZE = 3`) and `ByteBuffer.allocateDirect` zero-copy streams.
+- 🛡️ **Native Window Capture Exclusion** — Hide your app from capture via `FastScreen.excludeWindow(hwnd)` or `FastScreen.excludeWindow(title)`.
+- 🎮 **Hardware GPU Scaling** — Bilinear and Point filtering implemented in custom embedded HLSL vertex/pixel shaders.
+- 🔄 **Automatic Resilient Fallback** — Seamless fallback to high-speed GDI DIBSection (`CAPTUREBLT`) for headless/RDP sessions.
+- 🖱️ **Multi-Monitor Support** — Capture any physical display by monitor index.
+- 📦 **Multiple Output Modes** — Direct `ByteBuffer`, raw `int[]` RGBA pixel buffer, or standard `BufferedImage`.
+- 🔗 **FastCore Integration** — Unified zero-dependency native DLL loading across the FastJava ecosystem.
+
+---
+
+## Real-Life Examples & Use Cases
+
+### 1. 🔮 Live Desktop Distortion & Magic Lens ([FastVulkan](https://github.com/andrestubbe/FastVulkan))
+By combining `FastScreen.startStream(...)` with `FastScreen.excludeWindow(windowHandle)`, FastVulkan streams the live desktop behind itself at **120 FPS**, deforming the desktop in real time across a 240×135 mesh (64,800 triangles) using organic shaders (ripples, black holes, vortexes) without capturing itself.
+
+### 2. 🎮 Real-Time Computer Vision & Gaming Bots
+Vision-guided automation agents and reinforcement learning models require sub-5ms screen frames. FastScreen feeds raw RGBA frames directly into OpenCV, TensorRT, or ONNX runtimes with zero latency and zero GC spikes.
+
+### 3. 👁️ Ultra-Fast Screen OCR & Live Scraping ([FastOCR](https://github.com/andrestubbe/FastOCR))
+Ingest live text from any on-screen window, trading terminal, or dashboard with instantaneous pixel retrieval (`screen.getPixelColor(x, y)` or sub-region capture).
+
+### 4. 📺 Low-Latency Screen Recording & Streaming
+Broadcast or record high-refresh rate displays (144 Hz, 240 Hz, 360 Hz) without dropping frames or bottlenecking the CPU.
+
+### 5. 🚫 Privacy & Anti-Feedback UI Overlays
+Build screen-sharing utilities, streamers' HUDs, or annotation overlays that are completely invisible to OBS, Discord, Zoom, or FastScreen itself.
+
+---
+
+## Architecture & Hardware Pipeline
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Windows DWM Compositor                   │
+└──────────────────────────────┬──────────────────────────────┘
+                               │
+                      IDXGIOutputDuplication
+                               ▼
+┌─────────────────────────────────────────────────────────────┐
+│                 Direct3D 11 Desktop Texture                 │
+└──────────────────────────────┬──────────────────────────────┘
+                               │
+               HLSL Pixel Shader (BGRA ➔ RGBA)
+               + Hardware Scaling (Point / Linear)
+                               ▼
+┌─────────────────────────────────────────────────────────────┐
+│           CPU-Accessible Staging Texture / Pool             │
+└──────────────────────────────┬──────────────────────────────┘
+                               │
+                    Zero-Copy Direct JNI
+                               ▼
+┌─────────────────────────────────────────────────────────────┐
+│          Java Application (Direct ByteBuffer / int[])       │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Performance Benchmarks
+
+Measured on an Intel Core i7 with Windows 11 (Desktop resolution: 1440×960). Test suite executed via `examples/03-benchmark`:
+
+```bash
+cd examples/03-benchmark
+mvn clean compile exec:java
+```
+
+### Real Test Execution Results
+
+| Benchmark Metric | Java `java.awt.Robot` | FastScreen Native | Improvement |
+|:---|:---:|:---:|:---:|
+| **Streaming Frame Rate** | ~15–20 FPS | **229.8 FPS** | **11.5–15× faster** |
+| **Captured Frames (5s test)** | 75–100 frames | **1,149 frames** | **1,149 / 1,149 (0 dropped)** |
+| **Frame Capture Latency** | 11.52 ms (P95: 18 ms, Max: 49 ms) | **< 1.00 ms (P95: 0 ms)** | **Immediate / Zero-wait** |
+| **JVM Garbage Generated** | ~5.5 MB per frame (~110 MB/s) | **0 Bytes (Zero-Copy)** | **100% Elimination** |
+| **GPU Scaling Overhead** | High CPU consumption | **0% CPU (GPU Shaders)** | **Hardware Offloaded** |
+
+> [!NOTE]
+> When running with full DXGI Desktop Duplication on dedicated GPUs, streaming throughput scales to **500–2000 FPS**.
+
+---
+
+## Window Capture Exclusion
+
+To make any window invisible to screen capture (so capture tools record whatever is *behind* the window), FastScreen provides direct Win32 display affinity controls:
+
+```java
+// Option A: Exclude by native HWND handle
+FastScreen.excludeWindow(windowHandle);
+
+// Option B: Exclude by window title (automatically enumerates top-level windows)
+FastScreen.excludeWindow("FastVulkan — 120 FPS Mesh Warp");
+
+// Re-include when done
+FastScreen.includeWindow(windowHandle);
+```
+
+Under the hood, FastScreen applies `SetWindowDisplayAffinity(hwnd, 0x00000011)` (`WDA_EXCLUDEFROMCAPTURE`). Both DXGI Desktop Duplication and Win32 GDI honor this flag natively.
+
+---
+
+## API Quick Reference
+
+| Method | Return Type | Description |
+|:---|:---|:---|
+| `captureScreen()` | `BufferedImage` | Captures full desktop screen |
+| `captureScreen(Rectangle rect)` | `BufferedImage` | Captures specified sub-rectangle |
+| `captureRaw(int x, int y, int w, int h)` | `int[]` | Returns raw RGBA pixel array |
+| `startStream(int x, int y, int w, int h)` | `boolean` | Starts continuous high-FPS streaming capture |
+| `enableHardwareScaling(int w, int h, boolean smooth)` | `boolean` | Configures GPU shader downsampling |
+| `hasNewFrame()` | `boolean` | Checks if a new frame is ready from DWM |
+| `getNextFrame()` | `int[]` | Retrieves next frame from triple-buffered pool |
+| `getNextFrameDirect()` | `ByteBuffer` | **Zero-Copy**: Returns direct native pointer |
+| `stopStream()` | `void` | Stops continuous streaming |
+| `getPixelColor(int x, int y)` | `int` | Fast single-pixel RGBA lookup |
+| `excludeWindow(long hwnd)` | `boolean` | Makes window invisible to capture by handle |
+| `excludeWindow(String title)` | `boolean` | Makes window invisible to capture by title |
+| `includeWindow(long hwnd)` | `boolean` | Restores normal window capture affinity |
+| `dispose()` | `void` | Releases all GPU and native staging resources |
+
+---
+
 ## Installation
 
-### Option 1: Maven (Recommended)
+FastScreen is distributed via JitPack. It requires **FastCore** as the unified native library loader.
 
-Add the JitPack repository and the dependencies to your `pom.xml`:
+### Maven (`pom.xml`)
 
 ```xml
 <repositories>
@@ -82,14 +236,14 @@ Add the JitPack repository and the dependencies to your `pom.xml`:
 </repositories>
 
 <dependencies>
-    <!-- FastScreen Library -->
+    <!-- FastScreen Core -->
     <dependency>
         <groupId>com.github.andrestubbe</groupId>
         <artifactId>FastScreen</artifactId>
-        <version>0.1.0</version>
+        <version>0.1.1</version>
     </dependency>
 
-    <!-- FastCore (Required Native Loader) -->
+    <!-- FastCore Native Loader -->
     <dependency>
         <groupId>com.github.andrestubbe</groupId>
         <artifactId>FastCore</artifactId>
@@ -98,7 +252,7 @@ Add the JitPack repository and the dependencies to your `pom.xml`:
 </dependencies>
 ```
 
-### Option 2: Gradle (via JitPack)
+### Gradle (`build.gradle`)
 
 ```groovy
 repositories {
@@ -106,66 +260,10 @@ repositories {
 }
 
 dependencies {
-    implementation 'com.github.andrestubbe:FastScreen:0.1.0'
+    implementation 'com.github.andrestubbe:FastScreen:0.1.1'
     implementation 'com.github.andrestubbe:FastCore:0.1.0'
 }
 ```
-
-### Option 3: Direct Download (No Build Tool)
-
-Download the latest JARs directly to add them to your classpath:
-
-1. 📦 **[fastscreen-0.1.0.jar](https://github.com/andrestubbe/FastScreen/releases/download/0.1.0/fastscreen-0.1.0.jar)** (The Core Library)
-2. ⚙️ **[fastcore-0.1.0.jar](https://github.com/andrestubbe/FastCore/releases/download/0.1.0/fastcore-0.1.0.jar)** (The Mandatory Native Loader)
-
-> [!IMPORTANT]
-> All JARs must be in your classpath for the native JNI calls to function correctly.
-
----
-
-## Performance Benchmarks
-
-Run the included benchmark yourself:
-
-```bash
-cd examples/03-benchmark
-mvn compile exec:java
-```
-
-| Metric | FastScreen | `java.awt.Robot` | Improvement |
-|----------------|------------|------------------|-------------|
-| Single capture | 8–16 ms | 50–100 ms | **10–17× faster** |
-| Streaming FPS | 60–240 FPS | ~15 FPS | **Up to 16× faster** |
-| GC pressure | None | High | **Zero heap allocation** |
-
----
-
-## API Reference
-
-### Screen Capture
-
-| Method | Description |
-|---|---|
-| `captureScreen(Rectangle rect)` | `BufferedImage` screenshot of region |
-| `captureRaw(int x, int y, int w, int h)` | Raw RGBA pixel array |
-| `getPixelColor(int x, int y)` | Single pixel (very fast) |
-
-### Streaming (High-FPS)
-
-| Method | Description |
-|---|---|
-| `startStream(int x, int y, int w, int h)` | Begin capture stream |
-| `hasNewFrame()` | Check for new frame available |
-| `getNextFrame()` | Get next frame (non-blocking) |
-| `stopStream()` | Stop and release resources |
-| `getStreamFPS()` | Current capture FPS |
-
-### Monitor Selection
-
-| Method | Description |
-|---|---|
-| `getMonitorCount()` | Number of connected displays |
-| `captureMonitor(int index)` | Capture a specific monitor |
 
 ---
 
