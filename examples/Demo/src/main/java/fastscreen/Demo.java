@@ -11,32 +11,20 @@ import java.awt.image.BufferedImage;
 import java.awt.image.DataBufferInt;
 
 /**
- * FastScreen 0.1.1 — Visual Showcase & YouTube Hero Demo.
+ * FastScreen 0.1.1 — Clean Visual Showcase Demo.
  *
  * Demonstrates:
- * - 240+ FPS Zero-Copy DirectX 11 DXGI Desktop Duplication
+ * - Ultra-high FPS Desktop Duplication (GPU Hardware Scaled)
  * - Native Window Capture Exclusion (WDA_EXCLUDEFROMCAPTURE)
- * - See-Through Magic Window vs. Recursive Droste Mirror recursion
- * - Real-Time Screen Pixel Loupe & Color Inspector (getPixelColor)
- * - FastTheme 1173x610 Dark Window Styling and Immersive Title Bar
+ * - Clean edge-to-edge video canvas (No overlays)
+ * - Full telemetry & control status in the native Windows Title Bar
  */
 public class Demo extends Canvas {
 
-    // --- Window / Render Target (FastAnimation & FastTheme Standard) ---
+    // --- Window / Render Target (FastAnimation Standard) ---
     private static final int WIDTH = 1173;
     private static final int HEIGHT = 610;
 
-    // --- Theme Colors (FastTheme Antigravity Palette) ---
-    private static final Color BG_DARK = new Color(16, 20, 24);
-    private static final Color CARD_BG = new Color(20, 26, 32, 220);
-    private static final Color CARD_BORDER = new Color(50, 65, 80, 180);
-    private static final Color ACCENT_CYAN = new Color(0, 255, 200);
-    private static final Color ACCENT_GREEN = new Color(0, 230, 118);
-    private static final Color ACCENT_ORANGE = new Color(255, 145, 0);
-    private static final Color TEXT_PRIMARY = new Color(240, 245, 250);
-    private static final Color TEXT_MUTED = new Color(139, 148, 158);
-
-    // --- FastScreen Engine & State ---
     private final FastScreen screen;
     private final JFrame parentFrame;
     private long hwnd = 0;
@@ -45,22 +33,23 @@ public class Demo extends Canvas {
     private final int screenW;
     private final int screenH;
 
-    // Off-screen Desktop Frame Buffer
-    private BufferedImage desktopImage;
-    private int[] desktopPixels;
+    // 1:1 Scaled Canvas Buffer (Fastest VRAM Blit)
+    private BufferedImage canvasImage;
+    private int[] canvasPixels;
 
-    // Interactive Flags
+    // Fallback full-resolution buffer if hardware scaling is inactive
+    private BufferedImage fallbackImage;
+    private int[] fallbackPixels;
+    private boolean hardwareScaled = false;
+
+    // Interactive State
     private volatile boolean isExcluded = true;
-    private volatile boolean showLoupe = true;
-    private volatile boolean showHud = true;
     private volatile boolean isPaused = false;
     private volatile boolean running = true;
 
-    // Telemetry Stats
+    // Telemetry
     private volatile double currentFps = 0.0;
     private volatile double avgFrameTimeMs = 0.8;
-    private volatile int lastPixelColor = 0;
-    private volatile Point lastMouseScreen = new Point(0, 0);
 
     public Demo(JFrame parentFrame) {
         this.parentFrame = parentFrame;
@@ -72,53 +61,27 @@ public class Demo extends Canvas {
         this.screenW = screenDim.width;
         this.screenH = screenDim.height;
 
-        // 2. Initialize FastScreen Engine
+        // 2. Initialize FastScreen
         this.screen = new FastScreen();
 
-        // 3. Prepare offscreen frame image
-        this.desktopImage = new BufferedImage(screenW, screenH, BufferedImage.TYPE_INT_ARGB);
-        this.desktopPixels = ((DataBufferInt) desktopImage.getRaster().getDataBuffer()).getData();
+        // 3. Prepare 1:1 Canvas Buffer for Zero-Copy display
+        this.canvasImage = new BufferedImage(WIDTH, HEIGHT, BufferedImage.TYPE_INT_RGB);
+        this.canvasPixels = ((DataBufferInt) canvasImage.getRaster().getDataBuffer()).getData();
 
-        // 4. Register Mouse & Keyboard Listeners
-        initInputListeners();
-    }
-
-    private void initInputListeners() {
+        // 4. Keyboard Controls
         addKeyListener(new KeyAdapter() {
             @Override
             public void keyPressed(KeyEvent e) {
-                handleKey(e.getKeyCode());
-            }
-        });
-
-        addMouseMotionListener(new MouseMotionAdapter() {
-            @Override
-            public void mouseMoved(MouseEvent e) {
-                updateMouseInspect();
-            }
-        });
-
-        addMouseListener(new MouseAdapter() {
-            @Override
-            public void mouseClicked(MouseEvent e) {
-                // Click top-right badge to toggle exclusion
-                if (e.getX() > WIDTH - 340 && e.getY() < 60) {
-                    toggleExclusion();
-                } else if (e.getX() > WIDTH - 260 && e.getY() > HEIGHT - 180) {
-                    showLoupe = !showLoupe;
+                switch (e.getKeyCode()) {
+                    case KeyEvent.VK_E -> toggleExclusion();
+                    case KeyEvent.VK_SPACE -> {
+                        isPaused = !isPaused;
+                        updateTitleBar();
+                    }
+                    case KeyEvent.VK_ESCAPE -> exitApp();
                 }
             }
         });
-    }
-
-    private void handleKey(int keyCode) {
-        switch (keyCode) {
-            case KeyEvent.VK_E -> toggleExclusion();
-            case KeyEvent.VK_P -> showLoupe = !showLoupe;
-            case KeyEvent.VK_H -> showHud = !showHud;
-            case KeyEvent.VK_SPACE -> isPaused = !isPaused;
-            case KeyEvent.VK_ESCAPE -> exitApp();
-        }
     }
 
     private void toggleExclusion() {
@@ -130,16 +93,24 @@ public class Demo extends Canvas {
                 FastScreen.includeWindow(hwnd);
             }
         }
+        updateTitleBar();
     }
 
-    private void updateMouseInspect() {
-        try {
-            Point p = MouseInfo.getPointerInfo().getLocation();
-            lastMouseScreen = p;
-            if (screen != null) {
-                lastPixelColor = screen.getPixelColor(p.x, p.y);
+    private void updateTitleBar() {
+        SwingUtilities.invokeLater(() -> {
+            if (isPaused) {
+                parentFrame.setTitle(String.format(
+                    "FastScreen 0.1.1 — PAUSED | Exclusion: %s [E] | [SPACE] Resume | [ESC] Exit",
+                    isExcluded ? "ON (Transparent Lens)" : "OFF (Droste Mirror)"
+                ));
+            } else {
+                parentFrame.setTitle(String.format(
+                    "FastScreen 0.1.1 — %.1f FPS | %.2f ms | Exclusion: %s [E] | [SPACE] Pause",
+                    currentFps, avgFrameTimeMs,
+                    isExcluded ? "ON (Transparent Lens)" : "OFF (Droste Mirror)"
+                ));
             }
-        } catch (Throwable ignored) {}
+        });
     }
 
     private void exitApp() {
@@ -156,273 +127,116 @@ public class Demo extends Canvas {
         createBufferStrategy(3);
         BufferStrategy bs = getBufferStrategy();
 
-        // Retrieve native HWND and apply initial exclusion
+        // 1. Retrieve native HWND and apply initial exclusion
         try {
             hwnd = FastTheme.getWindowHandle(parentFrame);
             if (hwnd != 0) {
                 FastScreen.excludeWindow(hwnd);
             }
         } catch (Throwable t) {
-            System.err.println("[FastScreen Demo] HWND extraction note: " + t.getMessage());
+            System.err.println("[FastScreen Demo] HWND note: " + t.getMessage());
         }
 
-        // Start High-FPS Capture Stream
+        // 2. Start Desktop Streaming
         boolean streamStarted = screen.startStream(0, 0, screenW, screenH);
-        if (!streamStarted) {
-            System.err.println("[FastScreen Demo] Warning: DXGI stream start failed, using direct single-capture.");
+        if (streamStarted) {
+            // Enable GPU Hardware Scaling directly to 1173x610 (Bypasses CPU scaling completely!)
+            hardwareScaled = screen.enableHardwareScaling(WIDTH, HEIGHT, false);
+            if (hardwareScaled) {
+                System.out.println("[FastScreen Demo] GPU Hardware scaling enabled: " + screenW + "x" + screenH + " -> " + WIDTH + "x" + HEIGHT);
+            } else {
+                System.out.println("[FastScreen Demo] GPU scaling unavailable, using fast 1:1 blit.");
+                fallbackImage = new BufferedImage(screenW, screenH, BufferedImage.TYPE_INT_RGB);
+                fallbackPixels = ((DataBufferInt) fallbackImage.getRaster().getDataBuffer()).getData();
+            }
+        } else {
+            fallbackImage = new BufferedImage(screenW, screenH, BufferedImage.TYPE_INT_RGB);
+            fallbackPixels = ((DataBufferInt) fallbackImage.getRaster().getDataBuffer()).getData();
         }
 
-        // Render & Capture Loop
+        updateTitleBar();
+
+        // 3. Ultra-Fast High-FPS Render Loop
         new Thread(() -> {
             long lastFpsTime = System.nanoTime();
             int frameCount = 0;
-            long lastFrameTimestamp = System.nanoTime();
 
             while (running) {
                 long frameStart = System.nanoTime();
 
-                // 1. Capture Next Desktop Frame
+                boolean hasFrame = false;
+
                 if (!isPaused) {
                     int[] newPixels = screen.getNextFrame();
-                    if (newPixels != null && newPixels.length == desktopPixels.length) {
-                        System.arraycopy(newPixels, 0, desktopPixels, 0, newPixels.length);
-                    } else if (newPixels == null && !streamStarted) {
-                        // Fallback one-shot
+                    if (newPixels != null) {
+                        hasFrame = true;
+                        if (hardwareScaled && newPixels.length == canvasPixels.length) {
+                            // FASTEST ZERO-COPY PATH: GPU already downscaled to 1173x610
+                            System.arraycopy(newPixels, 0, canvasPixels, 0, canvasPixels.length);
+                        } else if (fallbackPixels != null && newPixels.length == fallbackPixels.length) {
+                            System.arraycopy(newPixels, 0, fallbackPixels, 0, fallbackPixels.length);
+                        }
+                    } else if (!streamStarted) {
                         BufferedImage shot = screen.captureScreen();
-                        if (shot != null) {
+                        if (shot != null && fallbackPixels != null) {
+                            hasFrame = true;
                             int[] shotPx = ((DataBufferInt) shot.getRaster().getDataBuffer()).getData();
-                            System.arraycopy(shotPx, 0, desktopPixels, 0, Math.min(shotPx.length, desktopPixels.length));
+                            System.arraycopy(shotPx, 0, fallbackPixels, 0, Math.min(shotPx.length, fallbackPixels.length));
                         }
                     }
                 }
 
-                // Update mouse inspector position and pixel color
-                updateMouseInspect();
-
-                // 2. Render Frame to Canvas
-                Graphics2D g = (Graphics2D) bs.getDrawGraphics();
-                g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
-                g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
-
-                // Draw captured desktop scaled to canvas
-                g.drawImage(desktopImage, 0, 0, WIDTH, HEIGHT, null);
-
-                // Render Overlays
-                if (showHud) {
-                    drawTelemetryCard(g);
+                // Render frame to canvas (pure edge-to-edge video, NO overlays!)
+                Graphics g = bs.getDrawGraphics();
+                if (hardwareScaled) {
+                    g.drawImage(canvasImage, 0, 0, null);
+                } else if (fallbackImage != null) {
+                    g.drawImage(fallbackImage, 0, 0, WIDTH, HEIGHT, null);
                 }
-                drawExclusionBadge(g);
-
-                if (showLoupe) {
-                    drawPixelLoupe(g);
-                }
-
-                drawBottomRibbon(g);
-
                 g.dispose();
                 bs.show();
-                Toolkit.getDefaultToolkit().sync();
 
-                // 3. Calculate Telemetry
+                // Telemetry Calculation
                 long frameEnd = System.nanoTime();
                 long durationNs = frameEnd - frameStart;
-                avgFrameTimeMs = avgFrameTimeMs * 0.9 + (durationNs / 1_000_000.0) * 0.1;
+                avgFrameTimeMs = avgFrameTimeMs * 0.95 + (durationNs / 1_000_000.0) * 0.05;
 
                 frameCount++;
-                if (frameEnd - lastFpsTime >= 500_000_000L) { // Update every 0.5s
+                if (frameEnd - lastFpsTime >= 500_000_000L) { // Update title every 0.5s
                     currentFps = (frameCount * 1_000_000_000.0) / (frameEnd - lastFpsTime);
                     frameCount = 0;
                     lastFpsTime = frameEnd;
-
-                    SwingUtilities.invokeLater(() -> {
-                        String title = String.format("FastScreen 0.1.1 — %.1f FPS | %.2f ms | %s",
-                                currentFps, avgFrameTimeMs,
-                                isExcluded ? "Exclusion ACTIVE (Transparent Lens)" : "Droste RECURSION (Mirror)");
-                        parentFrame.setTitle(title);
-                    });
+                    updateTitleBar();
                 }
 
-                // Throttle slightly if needed to avoid burning 100% CPU thread
-                Thread.yield();
+                // Yield to prevent CPU lock if waiting for next frame
+                if (!hasFrame) {
+                    Thread.yield();
+                }
             }
-        }, "FastScreen-Demo-Render-Loop").start();
+        }, "FastScreen-Render-Loop").start();
     }
 
-    // ---------------------------------------------------------
-    // HUD Card (Top-Left)
-    // ---------------------------------------------------------
-    private void drawTelemetryCard(Graphics2D g) {
-        int cardX = 20;
-        int cardY = 20;
-        int cardW = 320;
-        int cardH = 150;
-
-        // Background
-        g.setColor(CARD_BG);
-        g.fillRoundRect(cardX, cardY, cardW, cardH, 16, 16);
-        g.setColor(CARD_BORDER);
-        g.setStroke(new BasicStroke(1.2f));
-        g.drawRoundRect(cardX, cardY, cardW, cardH, 16, 16);
-
-        // Header
-        g.setFont(new Font("Segoe UI", Font.BOLD, 13));
-        g.setColor(ACCENT_CYAN);
-        g.drawString("⚡ FASTSCREEN 0.1.1 TELEMETRY", cardX + 16, cardY + 26);
-
-        // FPS Big Meter
-        g.setFont(new Font("Consolas", Font.BOLD, 28));
-        g.setColor(ACCENT_GREEN);
-        g.drawString(String.format("%.1f FPS", currentFps > 0 ? currentFps : 240.0), cardX + 16, cardY + 60);
-
-        // Detailed Stats
-        g.setFont(new Font("Consolas", Font.PLAIN, 12));
-        g.setColor(TEXT_PRIMARY);
-        g.drawString(String.format("Capture Latency:  %.2f ms (P95: 0 ms)", avgFrameTimeMs), cardX + 16, cardY + 84);
-        g.drawString("GC Heap Pressure: 0 Bytes (Zero-Copy Pool)", cardX + 16, cardY + 102);
-        g.drawString(String.format("Native Duplication: %dx%d DXGI", screenW, screenH), cardX + 16, cardY + 120);
-        g.drawString("Viewport Scaling:   1173x610 GPU Canvas", cardX + 16, cardY + 138);
-    }
-
-    // ---------------------------------------------------------
-    // Window Exclusion Status Badge (Top-Right)
-    // ---------------------------------------------------------
-    private void drawExclusionBadge(Graphics2D g) {
-        int badgeW = 340;
-        int badgeH = 46;
-        int badgeX = WIDTH - badgeW - 20;
-        int badgeY = 20;
-
-        Color badgeColor = isExcluded ? ACCENT_GREEN : ACCENT_ORANGE;
-
-        g.setColor(CARD_BG);
-        g.fillRoundRect(badgeX, badgeY, badgeW, badgeH, 24, 24);
-        g.setColor(badgeColor);
-        g.setStroke(new BasicStroke(1.5f));
-        g.drawRoundRect(badgeX, badgeY, badgeW, badgeH, 24, 24);
-
-        // Glowing Status Dot
-        g.setColor(badgeColor);
-        g.fillOval(badgeX + 16, badgeY + 16, 14, 14);
-
-        g.setFont(new Font("Segoe UI", Font.BOLD, 12));
-        g.setColor(TEXT_PRIMARY);
-        if (isExcluded) {
-            g.drawString("[E] WINDOW EXCLUSION: ACTIVE", badgeX + 38, badgeY + 22);
-            g.setFont(new Font("Segoe UI", Font.PLAIN, 11));
-            g.setColor(TEXT_MUTED);
-            g.drawString("Transparent Magic Lens — Captures Behind Window", badgeX + 38, badgeY + 37);
-        } else {
-            g.drawString("[E] WINDOW EXCLUSION: OFF", badgeX + 38, badgeY + 22);
-            g.setFont(new Font("Segoe UI", Font.PLAIN, 11));
-            g.setColor(ACCENT_ORANGE);
-            g.drawString("Recursive Droste Mirror — Self-Capture Feedback", badgeX + 38, badgeY + 37);
-        }
-    }
-
-    // ---------------------------------------------------------
-    // Pixel Loupe & Color Inspector (Bottom-Right)
-    // ---------------------------------------------------------
-    private void drawPixelLoupe(Graphics2D g) {
-        int loupeW = 250;
-        int loupeH = 150;
-        int loupeX = WIDTH - loupeW - 20;
-        int loupeY = HEIGHT - loupeH - 65;
-
-        g.setColor(CARD_BG);
-        g.fillRoundRect(loupeX, loupeY, loupeW, loupeH, 16, 16);
-        g.setColor(CARD_BORDER);
-        g.setStroke(new BasicStroke(1.2f));
-        g.drawRoundRect(loupeX, loupeY, loupeW, loupeH, 16, 16);
-
-        // Header
-        g.setFont(new Font("Segoe UI", Font.BOLD, 12));
-        g.setColor(ACCENT_CYAN);
-        g.drawString("🔍 PIXEL INSPECTOR [P]", loupeX + 16, loupeY + 24);
-
-        // Swatch Box
-        int r = (lastPixelColor >> 16) & 0xFF;
-        int gr = (lastPixelColor >> 8) & 0xFF;
-        int b = lastPixelColor & 0xFF;
-        Color inspectedColor = new Color(r, gr, b);
-
-        int swatchSize = 44;
-        int swatchX = loupeX + 16;
-        int swatchY = loupeY + 36;
-        g.setColor(inspectedColor);
-        g.fillRoundRect(swatchX, swatchY, swatchSize, swatchSize, 8, 8);
-        g.setColor(Color.WHITE);
-        g.setStroke(new BasicStroke(1.0f));
-        g.drawRoundRect(swatchX, swatchY, swatchSize, swatchSize, 8, 8);
-
-        // Hex Code & RGB Values
-        g.setFont(new Font("Consolas", Font.BOLD, 15));
-        g.setColor(TEXT_PRIMARY);
-        g.drawString(String.format("#%02X%02X%02X", r, gr, b), loupeX + 70, loupeY + 54);
-
-        g.setFont(new Font("Consolas", Font.PLAIN, 11));
-        g.setColor(TEXT_MUTED);
-        g.drawString(String.format("RGB: %d, %d, %d", r, gr, b), loupeX + 70, loupeY + 72);
-
-        // Query Position & Speed
-        g.drawString(String.format("Pos:  %d, %d", lastMouseScreen.x, lastMouseScreen.y), loupeX + 16, loupeY + 104);
-        g.drawString("Latency: < 0.1 ms (Direct Win32)", loupeX + 16, loupeY + 122);
-        g.drawString("API: FastScreen.getPixelColor()", loupeX + 16, loupeY + 138);
-    }
-
-    // ---------------------------------------------------------
-    // Bottom Controls Ribbon
-    // ---------------------------------------------------------
-    private void drawBottomRibbon(Graphics2D g) {
-        int ribbonH = 42;
-        int ribbonY = HEIGHT - ribbonH - 12;
-        int ribbonX = 20;
-        int ribbonW = WIDTH - 40;
-
-        g.setColor(new Color(16, 20, 24, 230));
-        g.fillRoundRect(ribbonX, ribbonY, ribbonW, ribbonH, 12, 12);
-        g.setColor(CARD_BORDER);
-        g.setStroke(new BasicStroke(1.0f));
-        g.drawRoundRect(ribbonX, ribbonY, ribbonW, ribbonH, 12, 12);
-
-        g.setFont(new Font("Segoe UI", Font.BOLD, 12));
-        g.setColor(TEXT_PRIMARY);
-
-        String text = "[E] Toggle Window Exclusion (Droste vs. Transparent)   |   [P] Pixel Inspector   |   [H] Toggle HUD   |   [SPACE] " +
-                (isPaused ? "RESUME Stream" : "FREEZE Frame") + "   |   [ESC] Exit";
-        FontMetrics fm = g.getFontMetrics();
-        int textX = ribbonX + (ribbonW - fm.stringWidth(text)) / 2;
-        int textY = ribbonY + ((ribbonH - fm.getHeight()) / 2) + fm.getAscent();
-
-        g.drawString(text, textX, textY);
-    }
-
-    // ---------------------------------------------------------
-    // FastTheme Rounded Window Icon
-    // ---------------------------------------------------------
     private static BufferedImage createRoundIcon() {
         BufferedImage icon = new BufferedImage(64, 64, BufferedImage.TYPE_INT_ARGB);
         Graphics2D g = icon.createGraphics();
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-        g.setColor(ACCENT_CYAN);
+        g.setColor(new Color(0, 255, 200));
         g.fillOval(4, 4, 56, 56);
-        g.setColor(BG_DARK);
+        g.setColor(new Color(16, 20, 24));
         g.fillOval(14, 14, 36, 36);
-        g.setColor(ACCENT_GREEN);
+        g.setColor(new Color(0, 230, 118));
         g.fillOval(24, 24, 16, 16);
         g.dispose();
         return icon;
     }
 
-    // ---------------------------------------------------------
-    // Main Launcher
-    // ---------------------------------------------------------
     public static void main(String[] args) {
         System.setProperty("sun.java2d.opengl", "true");
         System.setProperty("sun.awt.noerasebackground", "true");
 
         SwingUtilities.invokeLater(() -> {
-            JFrame frame = new JFrame("FastScreen 0.1.1 — 240+ FPS Desktop Capture & Window Exclusion Demo");
+            JFrame frame = new JFrame("FastScreen 0.1.1 — 240+ FPS Desktop Duplication");
             frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
             frame.setIgnoreRepaint(true);
             frame.setIconImage(createRoundIcon());
@@ -433,7 +247,7 @@ public class Demo extends Canvas {
             frame.setLocationRelativeTo(null);
             frame.addNotify();
 
-            // Apply Native Windows FastTheme Styling
+            // Native Windows 11 Dark Title Bar via FastTheme
             try {
                 long hwnd = FastTheme.getWindowHandle(frame);
                 if (hwnd != 0) {
