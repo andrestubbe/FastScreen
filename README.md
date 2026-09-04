@@ -225,7 +225,7 @@ Under the hood, FastScreen applies `SetWindowDisplayAffinity(hwnd, 0x00000011)` 
 
 FastScreen is distributed via JitPack. It requires **FastCore** as the unified native library loader.
 
-### Maven (`pom.xml`)
+### Option 1: Maven (`pom.xml`)
 
 ```xml
 <repositories>
@@ -252,7 +252,7 @@ FastScreen is distributed via JitPack. It requires **FastCore** as the unified n
 </dependencies>
 ```
 
-### Gradle (`build.gradle`)
+### Option 2: Gradle (`build.gradle`)
 
 ```groovy
 repositories {
@@ -264,6 +264,16 @@ dependencies {
     implementation 'com.github.andrestubbe:FastCore:0.1.0'
 }
 ```
+
+### Option 3: Direct Download (No Build Tool)
+
+Download the latest pre-compiled JARs directly to add them to your project's classpath:
+
+1. 📦 [**FastScreen-0.1.1.jar**](https://github.com/andrestubbe/FastScreen/releases/tag/0.1.1) (The Core Library)
+2. ⚙️ [**FastCore-0.1.0.jar**](https://github.com/andrestubbe/FastCore/releases/tag/0.1.0) (The Mandatory JNI Loader — for JNI-Native Modules)
+
+> [!IMPORTANT]
+> Both JARs must be present in your classpath for FastScreen's native functions to operate correctly.
 
 ---
 
