@@ -533,10 +533,10 @@ public:
         IDXGIResource* desktopResource = nullptr;
         DXGI_OUTDUPL_FRAME_INFO frameInfo;
         
-        // Try to acquire next frame (100ms timeout)
-        HRESULT hr = duplication->AcquireNextFrame(100, &frameInfo, &desktopResource);
+        // Non-blocking acquire next frame (0ms timeout to prevent locking render thread)
+        HRESULT hr = duplication->AcquireNextFrame(0, &frameInfo, &desktopResource);
         if (hr == DXGI_ERROR_WAIT_TIMEOUT) {
-            return false; // No new frame
+            return false; // No new frame right now
         }
         if (FAILED(hr)) {
             printf("[DXGICapture] Failed to acquire frame: 0x%08X\n", hr);

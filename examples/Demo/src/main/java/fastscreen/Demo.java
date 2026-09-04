@@ -2,6 +2,8 @@ package fastscreen;
 
 import fastscreen.FastScreen;
 import fasttheme.FastTheme;
+import fastproportion.Proportion;
+import fastproportion.ProportionMode;
 
 import javax.swing.*;
 import java.awt.*;
@@ -9,16 +11,17 @@ import java.awt.event.*;
 import java.awt.image.BufferStrategy;
 import java.awt.image.BufferedImage;
 import java.awt.image.DataBufferInt;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * FastScreen 0.1.1 — High-FPS Scalable Desktop Duplication Demo.
  *
- * Demonstrates:
- * - Ultra-high FPS Desktop Capture via DirectX 11 DXGI Duplication
+ * Features:
+ * - High-FPS DirectX 11 DXGI Desktop Duplication & GDI Fallback
  * - Native Window Capture Exclusion (WDA_EXCLUDEFROMCAPTURE)
- * - Automatic Desktop Aspect-Ratio matching (Width adapts to Screen Ratio)
- * - Freely Resizable Window with Aspect-Ratio Preserving Scaling
- * - Clean edge-to-edge canvas with all telemetry in Native Title Bar
+ * - FastProportion COVER Mode: Zero borders, 100% edge-to-edge scaling
+ * - Decoupled Producer-Consumer Architecture for Maximum Frame Rate
+ * - Freely resizable window with dynamic native title bar telemetry
  */
 public class Demo extends Canvas {
 
@@ -28,14 +31,23 @@ public class Demo extends Canvas {
     private final JFrame parentFrame;
     private long hwnd = 0;
 
-    // Desktop Dimensions & Aspect Ratio
+    // Desktop Resolution
     private final int screenW;
     private final int screenH;
-    private final double screenAspect;
 
-    // Full-Resolution Desktop Frame Buffer
-    private BufferedImage desktopImage;
-    private int[] desktopPixels;
+    // Double-Buffered Desktop Frames for Zero-Lock Decoupled Rendering
+    private final int[] bufferA;
+    private final int[] bufferB;
+    private volatile int[] activeFrontBuffer;
+    private final AtomicBoolean newFrameAvailable = new AtomicBoolean(false);
+
+    // FastProportion Zero-Allocation Math Context
+    private final Proportion proportion;
+    private final float[] renderBounds = new float[4];
+
+    // Offscreen Image for Display
+    private final BufferedImage displayImage;
+    private final int[] displayPixels;
 
     // Interactive State
     private volatile boolean isExcluded = true;
@@ -44,31 +56,39 @@ public class Demo extends Canvas {
 
     // Telemetry
     private volatile double currentFps = 0.0;
-    private volatile double avgFrameTimeMs = 0.8;
+    private volatile double avgCaptureTimeMs = 0.8;
 
     public Demo(JFrame parentFrame) {
         this.parentFrame = parentFrame;
 
-        // 1. Detect physical desktop resolution and aspect ratio
+        // 1. Detect physical desktop resolution
         Dimension screenDim = Toolkit.getDefaultToolkit().getScreenSize();
         this.screenW = screenDim.width;
         this.screenH = screenDim.height;
-        this.screenAspect = (double) screenW / (double) screenH;
 
-        // 2. Compute initial width strictly according to desktop aspect ratio
-        int initialWidth = (int) Math.round(BASE_HEIGHT * screenAspect);
+        // 2. Initialize FastProportion context
+        this.proportion = new Proportion(0, 0, screenW, screenH);
+
+        // 3. Compute initial window size (using desktop ratio)
+        int initialWidth = (int) Math.round(BASE_HEIGHT * ((double) screenW / screenH));
         setPreferredSize(new Dimension(initialWidth, BASE_HEIGHT));
         setMinimumSize(new Dimension(320, 180));
         setIgnoreRepaint(true);
 
-        // 3. Initialize FastScreen
+        // 4. Double buffer pool for capture
+        int totalPixels = screenW * screenH;
+        this.bufferA = new int[totalPixels];
+        this.bufferB = new int[totalPixels];
+        this.activeFrontBuffer = bufferA;
+
+        // Display image for canvas blit
+        this.displayImage = new BufferedImage(screenW, screenH, BufferedImage.TYPE_INT_RGB);
+        this.displayPixels = ((DataBufferInt) displayImage.getRaster().getDataBuffer()).getData();
+
+        // 5. Initialize FastScreen
         this.screen = new FastScreen();
 
-        // 4. Prepare full-resolution desktop frame buffer
-        this.desktopImage = new BufferedImage(screenW, screenH, BufferedImage.TYPE_INT_RGB);
-        this.desktopPixels = ((DataBufferInt) desktopImage.getRaster().getDataBuffer()).getData();
-
-        // 5. Register Keyboard Controls
+        // 6. Register Keyboard Controls
         addKeyListener(new KeyAdapter() {
             @Override
             public void keyPressed(KeyEvent e) {
@@ -108,8 +128,8 @@ public class Demo extends Canvas {
                 ));
             } else {
                 parentFrame.setTitle(String.format(
-                    "FastScreen 0.1.1 — %.1f FPS | %.2f ms | %dx%d | Exclusion: %s [E] | [SPACE] Pause",
-                    currentFps, avgFrameTimeMs, curW, curH,
+                    "FastScreen 0.1.1 — %.1f FPS | %.2f ms | %dx%d (COVER) | Exclusion: %s [E] | [SPACE] Pause",
+                    currentFps, avgCaptureTimeMs, curW, curH,
                     isExcluded ? "ON (Transparent Lens)" : "OFF (Droste Mirror)"
                 ));
             }
@@ -127,9 +147,9 @@ public class Demo extends Canvas {
     }
 
     public void start() {
-        createBufferStrategy(3);
+        createBufferStrategy(2);
 
-        // Retrieve native HWND and apply initial window exclusion
+        // 1. Retrieve native HWND and apply initial window exclusion
         try {
             hwnd = FastTheme.getWindowHandle(parentFrame);
             if (hwnd != 0) {
@@ -139,43 +159,73 @@ public class Demo extends Canvas {
             System.err.println("[FastScreen Demo] HWND note: " + t.getMessage());
         }
 
-        // Start Desktop Streaming at native desktop resolution
+        // 2. Start Desktop Streaming
         boolean streamStarted = screen.startStream(0, 0, screenW, screenH);
-        if (!streamStarted) {
-            System.err.println("[FastScreen Demo] Note: Streaming started in single-shot fallback mode.");
-        }
-
         updateTitleBar();
 
-        // High-Speed Render Loop
+        // -------------------------------------------------------------
+        // WORKER THREAD: Dedicated High-Speed Capture Pipeline
+        // -------------------------------------------------------------
+        Thread captureThread = new Thread(() -> {
+            int[] backBuffer = bufferB;
+
+            while (running) {
+                if (isPaused) {
+                    try { Thread.sleep(15); } catch (InterruptedException ignored) {}
+                    continue;
+                }
+
+                long t0 = System.nanoTime();
+                int[] rawFrame = screen.getNextFrame();
+                long t1 = System.nanoTime();
+
+                if (rawFrame != null && rawFrame.length == backBuffer.length) {
+                    System.arraycopy(rawFrame, 0, backBuffer, 0, rawFrame.length);
+                    // Atomic pointer swap to present latest frame without blocking
+                    activeFrontBuffer = backBuffer;
+                    backBuffer = (backBuffer == bufferA) ? bufferB : bufferA;
+                    newFrameAvailable.set(true);
+
+                    double captureMs = (t1 - t0) / 1_000_000.0;
+                    avgCaptureTimeMs = avgCaptureTimeMs * 0.9 + captureMs * 0.1;
+                } else if (!streamStarted) {
+                    BufferedImage shot = screen.captureScreen();
+                    if (shot != null) {
+                        int[] shotPx = ((DataBufferInt) shot.getRaster().getDataBuffer()).getData();
+                        System.arraycopy(shotPx, 0, backBuffer, 0, Math.min(shotPx.length, backBuffer.length));
+                        activeFrontBuffer = backBuffer;
+                        backBuffer = (backBuffer == bufferA) ? bufferB : bufferA;
+                        newFrameAvailable.set(true);
+                    }
+                }
+
+                // Yield to prevent burning 100% of a CPU core
+                Thread.yield();
+            }
+        }, "FastScreen-Capture-Worker");
+        captureThread.setDaemon(true);
+        captureThread.setPriority(Thread.MAX_PRIORITY);
+        captureThread.start();
+
+        // -------------------------------------------------------------
+        // RENDER THREAD: Smooth FastProportion COVER Display Loop
+        // -------------------------------------------------------------
         new Thread(() -> {
             long lastFpsTime = System.nanoTime();
             int frameCount = 0;
 
             while (running) {
-                long frameStart = System.nanoTime();
-                boolean hasFrame = false;
-
-                // 1. Ingest frame from FastScreen
-                if (!isPaused) {
-                    int[] newPixels = screen.getNextFrame();
-                    if (newPixels != null && newPixels.length == desktopPixels.length) {
-                        hasFrame = true;
-                        System.arraycopy(newPixels, 0, desktopPixels, 0, newPixels.length);
-                    } else if (!streamStarted) {
-                        BufferedImage shot = screen.captureScreen();
-                        if (shot != null) {
-                            hasFrame = true;
-                            int[] shotPx = ((DataBufferInt) shot.getRaster().getDataBuffer()).getData();
-                            System.arraycopy(shotPx, 0, desktopPixels, 0, Math.min(shotPx.length, desktopPixels.length));
-                        }
+                // If a fresh capture frame is ready, update display image
+                if (newFrameAvailable.compareAndSet(true, false)) {
+                    int[] front = activeFrontBuffer;
+                    if (front != null) {
+                        System.arraycopy(front, 0, displayPixels, 0, displayPixels.length);
                     }
                 }
 
-                // 2. Acquire BufferStrategy
                 BufferStrategy bs = getBufferStrategy();
                 if (bs == null || bs.contentsLost()) {
-                    createBufferStrategy(3);
+                    createBufferStrategy(2);
                     bs = getBufferStrategy();
                 }
 
@@ -184,34 +234,20 @@ public class Demo extends Canvas {
                     int ch = getHeight();
 
                     if (cw > 0 && ch > 0) {
-                        // Calculate Aspect-Ratio Preserving Destination Rectangle
-                        double canvasAspect = (double) cw / (double) ch;
-                        int drawX, drawY, drawW, drawH;
+                        // Compute FastProportion COVER Bounds (NEVER shows a border!)
+                        proportion.width = cw;
+                        proportion.height = ch;
+                        proportion.compute(ProportionMode.COVER, renderBounds);
 
-                        if (canvasAspect > screenAspect) {
-                            // Canvas is wider -> Pillarbox (bars left & right)
-                            drawH = ch;
-                            drawW = (int) Math.round(drawH * screenAspect);
-                            drawX = (cw - drawW) / 2;
-                            drawY = 0;
-                        } else {
-                            // Canvas is taller -> Letterbox (bars top & bottom)
-                            drawW = cw;
-                            drawH = (int) Math.round(drawW / screenAspect);
-                            drawX = 0;
-                            drawY = (ch - drawH) / 2;
-                        }
+                        int drawX = Math.round(renderBounds[0]);
+                        int drawY = Math.round(renderBounds[1]);
+                        int drawW = Math.round(renderBounds[2]);
+                        int drawH = Math.round(renderBounds[3]);
 
                         Graphics g = bs.getDrawGraphics();
 
-                        // Fill dark background if pillarbox or letterbox exists
-                        if (drawW < cw || drawH < ch) {
-                            g.setColor(new Color(16, 20, 24));
-                            g.fillRect(0, 0, cw, ch);
-                        }
-
-                        // Fast hardware-accelerated scaling blit
-                        g.drawImage(desktopImage, drawX, drawY, drawW, drawH, null);
+                        // Render edge-to-edge desktop image with zero margin
+                        g.drawImage(displayImage, drawX, drawY, drawW, drawH, null);
 
                         g.dispose();
                         if (!bs.contentsLost()) {
@@ -220,23 +256,17 @@ public class Demo extends Canvas {
                     }
                 }
 
-                // 3. Telemetry Calculation
-                long frameEnd = System.nanoTime();
-                long durationNs = frameEnd - frameStart;
-                avgFrameTimeMs = avgFrameTimeMs * 0.95 + (durationNs / 1_000_000.0) * 0.05;
-
                 frameCount++;
-                if (frameEnd - lastFpsTime >= 500_000_000L) {
-                    currentFps = (frameCount * 1_000_000_000.0) / (frameEnd - lastFpsTime);
+                long now = System.nanoTime();
+                if (now - lastFpsTime >= 500_000_000L) {
+                    currentFps = (frameCount * 1_000_000_000.0) / (now - lastFpsTime);
                     frameCount = 0;
-                    lastFpsTime = frameEnd;
+                    lastFpsTime = now;
                     updateTitleBar();
                 }
 
-                // Slight yield when idle to avoid spin-locking
-                if (!hasFrame) {
-                    Thread.yield();
-                }
+                // Smooth frame pacing (~200 FPS cap)
+                Thread.yield();
             }
         }, "FastScreen-Render-Loop").start();
     }
@@ -256,7 +286,6 @@ public class Demo extends Canvas {
     }
 
     public static void main(String[] args) {
-        System.setProperty("sun.java2d.opengl", "true");
         System.setProperty("sun.awt.noerasebackground", "true");
 
         SwingUtilities.invokeLater(() -> {
@@ -265,7 +294,7 @@ public class Demo extends Canvas {
             frame.setIgnoreRepaint(true);
             frame.setIconImage(createRoundIcon());
 
-            // Allow user to resize/scale window freely
+            // Freely resizable window
             frame.setResizable(true);
 
             Demo demo = new Demo(frame);
