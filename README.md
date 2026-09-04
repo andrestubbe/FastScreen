@@ -282,10 +282,8 @@ See the `examples/` directory for ready-to-run interactive implementations, benc
 
 | Example / Demo | Description | Path | Run Command |
 |---|---|---|---|
-| **Visual Showcase Hero Demo** | 1173×610 FastTheme interactive window featuring live 240+ FPS desktop duplication, `[E]` Window Exclusion toggle (Droste mirror vs. transparent magic window), `[P]` Pixel Loupe Inspector, and real-time telemetry HUD. | [`examples/Demo/Demo.java`](examples/Demo/src/main/java/fastscreen/Demo.java) | `run-demo.bat` |
+| **Visual Showcase Hero Demo** | Scalable FastTheme interactive window featuring live 240+ FPS desktop duplication, FastProportion COVER edge-to-edge scaling, `[E]` Window Exclusion toggle (Droste mirror vs. transparent magic window), and real-time title bar telemetry. | [`examples/Demo/Demo.java`](examples/Demo/src/main/java/fastscreen/Demo.java) | `run-demo.bat` |
 | **High-Precision JMH Benchmarks** | Standardized microbenchmarks measuring capture latency, frame rate throughput, and memory pressure. | [`examples/Benchmark`](examples/Benchmark) | `run-benchmark.bat` |
-| **Basic Single-Shot Capture** | Minimalist screenshot capture saving direct to PNG. | [`examples/00-basic-capture`](examples/00-basic-capture) | `mvn compile exec:java` |
-| **DirectX Smoke Test** | Verifies DXGI output duplication initialization and GPU device handles. | [`examples/01-smoke-test`](examples/01-smoke-test) | `mvn compile exec:java` |
 
 ---
 
