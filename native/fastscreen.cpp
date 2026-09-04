@@ -356,3 +356,76 @@ JNIEXPORT void JNICALL Java_fastscreen_FastScreen_nativeDispose(JNIEnv* env, job
 JNIEXPORT jint JNICALL Java_fastscreen_FastScreen_nativeGetMonitorCount(JNIEnv* env, jobject obj) {
     return 1;
 }
+
+#ifndef WDA_NONE
+#define WDA_NONE 0x00000000
+#endif
+
+#ifndef WDA_MONITOR
+#define WDA_MONITOR 0x00000001
+#endif
+
+#ifndef WDA_EXCLUDEFROMCAPTURE
+#define WDA_EXCLUDEFROMCAPTURE 0x00000011
+#endif
+
+/**
+ * @brief Exclude or include window from capture by HWND
+ */
+JNIEXPORT jboolean JNICALL Java_fastscreen_FastScreen_nativeSetWindowExcluded(
+    JNIEnv* env, jclass cls, jlong hwnd, jboolean exclude) {
+    if (!hwnd) {
+        return JNI_FALSE;
+    }
+    HWND h = (HWND)hwnd;
+    DWORD affinity = exclude ? WDA_EXCLUDEFROMCAPTURE : WDA_NONE;
+    BOOL res = SetWindowDisplayAffinity(h, affinity);
+    return res ? JNI_TRUE : JNI_FALSE;
+}
+
+struct FastScreenEnumData {
+    const char* targetTitle;
+    HWND foundHwnd;
+};
+
+static BOOL CALLBACK FastScreenEnumWindowsProc(HWND hwnd, LPARAM lParam) {
+    FastScreenEnumData* data = (FastScreenEnumData*)lParam;
+    char title[512];
+    if (GetWindowTextA(hwnd, title, sizeof(title)) > 0) {
+        if (strstr(title, data->targetTitle) != nullptr) {
+            data->foundHwnd = hwnd;
+            return FALSE; // stop search
+        }
+    }
+    return TRUE; // continue search
+}
+
+/**
+ * @brief Exclude or include window from capture by window title
+ */
+JNIEXPORT jboolean JNICALL Java_fastscreen_FastScreen_nativeSetWindowExcludedByTitle(
+    JNIEnv* env, jclass cls, jstring title, jboolean exclude) {
+    if (!title) {
+        return JNI_FALSE;
+    }
+    const char* str = env->GetStringUTFChars(title, nullptr);
+    if (!str) {
+        return JNI_FALSE;
+    }
+
+    HWND hwnd = FindWindowA(nullptr, str);
+    if (!hwnd) {
+        FastScreenEnumData data = { str, nullptr };
+        EnumWindows(FastScreenEnumWindowsProc, (LPARAM)&data);
+        hwnd = data.foundHwnd;
+    }
+    env->ReleaseStringUTFChars(title, str);
+
+    if (hwnd) {
+        DWORD affinity = exclude ? WDA_EXCLUDEFROMCAPTURE : WDA_NONE;
+        BOOL res = SetWindowDisplayAffinity(hwnd, affinity);
+        return res ? JNI_TRUE : JNI_FALSE;
+    }
+    return JNI_FALSE;
+}
+

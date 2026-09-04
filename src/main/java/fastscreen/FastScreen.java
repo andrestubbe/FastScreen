@@ -59,6 +59,8 @@ public class FastScreen {
     private native int nativeGetPixelColor(int x, int y);
     private native void nativeDispose(long handle);
     private native int nativeGetMonitorCount();
+    private static native boolean nativeSetWindowExcluded(long hwnd, boolean exclude);
+    private static native boolean nativeSetWindowExcludedByTitle(String title, boolean exclude);
     
     private long nativeHandle = 0;
     private boolean streaming = false;
@@ -308,6 +310,58 @@ public class FastScreen {
     public BufferedImage captureMonitor(int monitorIndex) {
         // TODO: Implement monitor capture
         throw new UnsupportedOperationException("Not yet implemented");
+    }
+
+    /**
+     * Excludes or includes a window from screen capture (DXGI Desktop Duplication, BitBlt, etc.).
+     * Prevents self-capture feedback loops (Droste effect) when viewing screen streams.
+     *
+     * @param hwnd Win32 HWND window handle
+     * @param exclude true to make the window invisible to capture, false to capture normally
+     * @return true if affinity successfully applied
+     */
+    public static boolean setWindowExcluded(long hwnd, boolean exclude) {
+        return nativeSetWindowExcluded(hwnd, exclude);
+    }
+
+    /**
+     * Excludes a window from screen capture by its HWND handle.
+     *
+     * @param hwnd Win32 HWND window handle
+     * @return true if successfully applied
+     */
+    public static boolean excludeWindow(long hwnd) {
+        return setWindowExcluded(hwnd, true);
+    }
+
+    /**
+     * Re-includes a window in screen capture by its HWND handle.
+     *
+     * @param hwnd Win32 HWND window handle
+     * @return true if successfully applied
+     */
+    public static boolean includeWindow(long hwnd) {
+        return setWindowExcluded(hwnd, false);
+    }
+
+    /**
+     * Excludes a window from screen capture by matching its window title.
+     *
+     * @param windowTitle Title or substring of the window to exclude
+     * @return true if window found and excluded
+     */
+    public static boolean excludeWindow(String windowTitle) {
+        return nativeSetWindowExcludedByTitle(windowTitle, true);
+    }
+
+    /**
+     * Re-includes a window in screen capture by matching its window title.
+     *
+     * @param windowTitle Title or substring of the window to include
+     * @return true if window found and included
+     */
+    public static boolean includeWindow(String windowTitle) {
+        return nativeSetWindowExcludedByTitle(windowTitle, false);
     }
     
     /**

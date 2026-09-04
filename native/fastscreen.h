@@ -148,6 +148,26 @@ JNIEXPORT void JNICALL Java_fastscreen_FastScreen_nativeDispose(JNIEnv* env, job
  */
 JNIEXPORT jint JNICALL Java_fastscreen_FastScreen_nativeGetMonitorCount(JNIEnv* env, jobject obj);
 
+/**
+ * @brief Set window display affinity to exclude or include from screen capture
+ * @param env JNI environment pointer
+ * @param cls FastScreen Java class
+ * @param hwnd Window handle (HWND as jlong)
+ * @param exclude JNI_TRUE to exclude (WDA_EXCLUDEFROMCAPTURE), JNI_FALSE to include (WDA_NONE)
+ * @return jboolean JNI_TRUE if successfully applied
+ */
+JNIEXPORT jboolean JNICALL Java_fastscreen_FastScreen_nativeSetWindowExcluded(JNIEnv* env, jclass cls, jlong hwnd, jboolean exclude);
+
+/**
+ * @brief Find window by title and set display affinity to exclude or include from screen capture
+ * @param env JNI environment pointer
+ * @param cls FastScreen Java class
+ * @param title Window title substring or exact title
+ * @param exclude JNI_TRUE to exclude, JNI_FALSE to include
+ * @return jboolean JNI_TRUE if window found and affinity applied
+ */
+JNIEXPORT jboolean JNICALL Java_fastscreen_FastScreen_nativeSetWindowExcludedByTitle(JNIEnv* env, jclass cls, jstring title, jboolean exclude);
+
 /** @} */
 
 #ifdef __cplusplus
