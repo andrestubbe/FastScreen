@@ -11,36 +11,31 @@ import java.awt.image.BufferedImage;
 import java.awt.image.DataBufferInt;
 
 /**
- * FastScreen 0.1.1 — Clean Visual Showcase Demo.
+ * FastScreen 0.1.1 — High-FPS Scalable Desktop Duplication Demo.
  *
  * Demonstrates:
- * - Ultra-high FPS Desktop Duplication (GPU Hardware Scaled)
+ * - Ultra-high FPS Desktop Capture via DirectX 11 DXGI Duplication
  * - Native Window Capture Exclusion (WDA_EXCLUDEFROMCAPTURE)
- * - Clean edge-to-edge video canvas (No overlays)
- * - Full telemetry & control status in the native Windows Title Bar
+ * - Automatic Desktop Aspect-Ratio matching (Width adapts to Screen Ratio)
+ * - Freely Resizable Window with Aspect-Ratio Preserving Scaling
+ * - Clean edge-to-edge canvas with all telemetry in Native Title Bar
  */
 public class Demo extends Canvas {
 
-    // --- Window / Render Target (FastAnimation Standard) ---
-    private static final int WIDTH = 1173;
-    private static final int HEIGHT = 610;
+    private static final int BASE_HEIGHT = 610;
 
     private final FastScreen screen;
     private final JFrame parentFrame;
     private long hwnd = 0;
 
-    // Desktop Dimensions
+    // Desktop Dimensions & Aspect Ratio
     private final int screenW;
     private final int screenH;
+    private final double screenAspect;
 
-    // 1:1 Scaled Canvas Buffer (Fastest VRAM Blit)
-    private BufferedImage canvasImage;
-    private int[] canvasPixels;
-
-    // Fallback full-resolution buffer if hardware scaling is inactive
-    private BufferedImage fallbackImage;
-    private int[] fallbackPixels;
-    private boolean hardwareScaled = false;
+    // Full-Resolution Desktop Frame Buffer
+    private BufferedImage desktopImage;
+    private int[] desktopPixels;
 
     // Interactive State
     private volatile boolean isExcluded = true;
@@ -53,22 +48,27 @@ public class Demo extends Canvas {
 
     public Demo(JFrame parentFrame) {
         this.parentFrame = parentFrame;
-        setPreferredSize(new Dimension(WIDTH, HEIGHT));
-        setIgnoreRepaint(true);
 
-        // 1. Detect physical desktop resolution
+        // 1. Detect physical desktop resolution and aspect ratio
         Dimension screenDim = Toolkit.getDefaultToolkit().getScreenSize();
         this.screenW = screenDim.width;
         this.screenH = screenDim.height;
+        this.screenAspect = (double) screenW / (double) screenH;
 
-        // 2. Initialize FastScreen
+        // 2. Compute initial width strictly according to desktop aspect ratio
+        int initialWidth = (int) Math.round(BASE_HEIGHT * screenAspect);
+        setPreferredSize(new Dimension(initialWidth, BASE_HEIGHT));
+        setMinimumSize(new Dimension(320, 180));
+        setIgnoreRepaint(true);
+
+        // 3. Initialize FastScreen
         this.screen = new FastScreen();
 
-        // 3. Prepare 1:1 Canvas Buffer for Zero-Copy display
-        this.canvasImage = new BufferedImage(WIDTH, HEIGHT, BufferedImage.TYPE_INT_RGB);
-        this.canvasPixels = ((DataBufferInt) canvasImage.getRaster().getDataBuffer()).getData();
+        // 4. Prepare full-resolution desktop frame buffer
+        this.desktopImage = new BufferedImage(screenW, screenH, BufferedImage.TYPE_INT_RGB);
+        this.desktopPixels = ((DataBufferInt) desktopImage.getRaster().getDataBuffer()).getData();
 
-        // 4. Keyboard Controls
+        // 5. Register Keyboard Controls
         addKeyListener(new KeyAdapter() {
             @Override
             public void keyPressed(KeyEvent e) {
@@ -98,15 +98,18 @@ public class Demo extends Canvas {
 
     private void updateTitleBar() {
         SwingUtilities.invokeLater(() -> {
+            int curW = getWidth();
+            int curH = getHeight();
             if (isPaused) {
                 parentFrame.setTitle(String.format(
-                    "FastScreen 0.1.1 — PAUSED | Exclusion: %s [E] | [SPACE] Resume | [ESC] Exit",
+                    "FastScreen 0.1.1 — PAUSED | %dx%d | Exclusion: %s [E] | [SPACE] Resume | [ESC] Exit",
+                    curW, curH,
                     isExcluded ? "ON (Transparent Lens)" : "OFF (Droste Mirror)"
                 ));
             } else {
                 parentFrame.setTitle(String.format(
-                    "FastScreen 0.1.1 — %.1f FPS | %.2f ms | Exclusion: %s [E] | [SPACE] Pause",
-                    currentFps, avgFrameTimeMs,
+                    "FastScreen 0.1.1 — %.1f FPS | %.2f ms | %dx%d | Exclusion: %s [E] | [SPACE] Pause",
+                    currentFps, avgFrameTimeMs, curW, curH,
                     isExcluded ? "ON (Transparent Lens)" : "OFF (Droste Mirror)"
                 ));
             }
@@ -125,9 +128,8 @@ public class Demo extends Canvas {
 
     public void start() {
         createBufferStrategy(3);
-        BufferStrategy bs = getBufferStrategy();
 
-        // 1. Retrieve native HWND and apply initial exclusion
+        // Retrieve native HWND and apply initial window exclusion
         try {
             hwnd = FastTheme.getWindowHandle(parentFrame);
             if (hwnd != 0) {
@@ -137,79 +139,101 @@ public class Demo extends Canvas {
             System.err.println("[FastScreen Demo] HWND note: " + t.getMessage());
         }
 
-        // 2. Start Desktop Streaming
+        // Start Desktop Streaming at native desktop resolution
         boolean streamStarted = screen.startStream(0, 0, screenW, screenH);
-        if (streamStarted) {
-            // Enable GPU Hardware Scaling directly to 1173x610 (Bypasses CPU scaling completely!)
-            hardwareScaled = screen.enableHardwareScaling(WIDTH, HEIGHT, false);
-            if (hardwareScaled) {
-                System.out.println("[FastScreen Demo] GPU Hardware scaling enabled: " + screenW + "x" + screenH + " -> " + WIDTH + "x" + HEIGHT);
-            } else {
-                System.out.println("[FastScreen Demo] GPU scaling unavailable, using fast 1:1 blit.");
-                fallbackImage = new BufferedImage(screenW, screenH, BufferedImage.TYPE_INT_RGB);
-                fallbackPixels = ((DataBufferInt) fallbackImage.getRaster().getDataBuffer()).getData();
-            }
-        } else {
-            fallbackImage = new BufferedImage(screenW, screenH, BufferedImage.TYPE_INT_RGB);
-            fallbackPixels = ((DataBufferInt) fallbackImage.getRaster().getDataBuffer()).getData();
+        if (!streamStarted) {
+            System.err.println("[FastScreen Demo] Note: Streaming started in single-shot fallback mode.");
         }
 
         updateTitleBar();
 
-        // 3. Ultra-Fast High-FPS Render Loop
+        // High-Speed Render Loop
         new Thread(() -> {
             long lastFpsTime = System.nanoTime();
             int frameCount = 0;
 
             while (running) {
                 long frameStart = System.nanoTime();
-
                 boolean hasFrame = false;
 
+                // 1. Ingest frame from FastScreen
                 if (!isPaused) {
                     int[] newPixels = screen.getNextFrame();
-                    if (newPixels != null) {
+                    if (newPixels != null && newPixels.length == desktopPixels.length) {
                         hasFrame = true;
-                        if (hardwareScaled && newPixels.length == canvasPixels.length) {
-                            // FASTEST ZERO-COPY PATH: GPU already downscaled to 1173x610
-                            System.arraycopy(newPixels, 0, canvasPixels, 0, canvasPixels.length);
-                        } else if (fallbackPixels != null && newPixels.length == fallbackPixels.length) {
-                            System.arraycopy(newPixels, 0, fallbackPixels, 0, fallbackPixels.length);
-                        }
+                        System.arraycopy(newPixels, 0, desktopPixels, 0, newPixels.length);
                     } else if (!streamStarted) {
                         BufferedImage shot = screen.captureScreen();
-                        if (shot != null && fallbackPixels != null) {
+                        if (shot != null) {
                             hasFrame = true;
                             int[] shotPx = ((DataBufferInt) shot.getRaster().getDataBuffer()).getData();
-                            System.arraycopy(shotPx, 0, fallbackPixels, 0, Math.min(shotPx.length, fallbackPixels.length));
+                            System.arraycopy(shotPx, 0, desktopPixels, 0, Math.min(shotPx.length, desktopPixels.length));
                         }
                     }
                 }
 
-                // Render frame to canvas (pure edge-to-edge video, NO overlays!)
-                Graphics g = bs.getDrawGraphics();
-                if (hardwareScaled) {
-                    g.drawImage(canvasImage, 0, 0, null);
-                } else if (fallbackImage != null) {
-                    g.drawImage(fallbackImage, 0, 0, WIDTH, HEIGHT, null);
+                // 2. Acquire BufferStrategy
+                BufferStrategy bs = getBufferStrategy();
+                if (bs == null || bs.contentsLost()) {
+                    createBufferStrategy(3);
+                    bs = getBufferStrategy();
                 }
-                g.dispose();
-                bs.show();
 
-                // Telemetry Calculation
+                if (bs != null) {
+                    int cw = getWidth();
+                    int ch = getHeight();
+
+                    if (cw > 0 && ch > 0) {
+                        // Calculate Aspect-Ratio Preserving Destination Rectangle
+                        double canvasAspect = (double) cw / (double) ch;
+                        int drawX, drawY, drawW, drawH;
+
+                        if (canvasAspect > screenAspect) {
+                            // Canvas is wider -> Pillarbox (bars left & right)
+                            drawH = ch;
+                            drawW = (int) Math.round(drawH * screenAspect);
+                            drawX = (cw - drawW) / 2;
+                            drawY = 0;
+                        } else {
+                            // Canvas is taller -> Letterbox (bars top & bottom)
+                            drawW = cw;
+                            drawH = (int) Math.round(drawW / screenAspect);
+                            drawX = 0;
+                            drawY = (ch - drawH) / 2;
+                        }
+
+                        Graphics g = bs.getDrawGraphics();
+
+                        // Fill dark background if pillarbox or letterbox exists
+                        if (drawW < cw || drawH < ch) {
+                            g.setColor(new Color(16, 20, 24));
+                            g.fillRect(0, 0, cw, ch);
+                        }
+
+                        // Fast hardware-accelerated scaling blit
+                        g.drawImage(desktopImage, drawX, drawY, drawW, drawH, null);
+
+                        g.dispose();
+                        if (!bs.contentsLost()) {
+                            bs.show();
+                        }
+                    }
+                }
+
+                // 3. Telemetry Calculation
                 long frameEnd = System.nanoTime();
                 long durationNs = frameEnd - frameStart;
                 avgFrameTimeMs = avgFrameTimeMs * 0.95 + (durationNs / 1_000_000.0) * 0.05;
 
                 frameCount++;
-                if (frameEnd - lastFpsTime >= 500_000_000L) { // Update title every 0.5s
+                if (frameEnd - lastFpsTime >= 500_000_000L) {
                     currentFps = (frameCount * 1_000_000_000.0) / (frameEnd - lastFpsTime);
                     frameCount = 0;
                     lastFpsTime = frameEnd;
                     updateTitleBar();
                 }
 
-                // Yield to prevent CPU lock if waiting for next frame
+                // Slight yield when idle to avoid spin-locking
                 if (!hasFrame) {
                     Thread.yield();
                 }
@@ -236,10 +260,13 @@ public class Demo extends Canvas {
         System.setProperty("sun.awt.noerasebackground", "true");
 
         SwingUtilities.invokeLater(() -> {
-            JFrame frame = new JFrame("FastScreen 0.1.1 — 240+ FPS Desktop Duplication");
+            JFrame frame = new JFrame("FastScreen 0.1.1 — Desktop Duplication");
             frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
             frame.setIgnoreRepaint(true);
             frame.setIconImage(createRoundIcon());
+
+            // Allow user to resize/scale window freely
+            frame.setResizable(true);
 
             Demo demo = new Demo(frame);
             frame.add(demo);
