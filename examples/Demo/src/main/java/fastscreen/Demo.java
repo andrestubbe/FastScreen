@@ -14,18 +14,19 @@ import java.awt.image.DataBufferInt;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * FastScreen 0.1.1 — High-FPS Scalable Desktop Duplication Demo.
+ * FastScreen 0.1.2 — High-FPS Scalable Desktop Duplication Demo.
  *
  * Features:
  * - High-FPS DirectX 11 DXGI Desktop Duplication & GDI Fallback
  * - Native Window Capture Exclusion (WDA_EXCLUDEFROMCAPTURE)
  * - FastProportion COVER Mode: Zero borders, 100% edge-to-edge scaling
+ * - Anti-Aliasing toggle [A] for smooth downsampling vs raw pixel speed
  * - Decoupled Producer-Consumer Architecture for Maximum Frame Rate
  * - Freely resizable window with dynamic native title bar telemetry
  */
 public class Demo extends Canvas {
 
-    private static final int BASE_HEIGHT = 610;
+    private static final int BASE_HEIGHT = 720;
 
     private final FastScreen screen;
     private final JFrame parentFrame;
@@ -52,6 +53,7 @@ public class Demo extends Canvas {
     // Interactive State
     private volatile boolean isExcluded = true;
     private volatile boolean isPaused = false;
+    private volatile boolean isAntiAliasing = true;
     private volatile boolean running = true;
 
     // Telemetry
@@ -94,6 +96,10 @@ public class Demo extends Canvas {
             public void keyPressed(KeyEvent e) {
                 switch (e.getKeyCode()) {
                     case KeyEvent.VK_E -> toggleExclusion();
+                    case KeyEvent.VK_A -> {
+                        isAntiAliasing = !isAntiAliasing;
+                        updateTitleBar();
+                    }
                     case KeyEvent.VK_SPACE -> {
                         isPaused = !isPaused;
                         updateTitleBar();
@@ -120,17 +126,18 @@ public class Demo extends Canvas {
         SwingUtilities.invokeLater(() -> {
             int curW = getWidth();
             int curH = getHeight();
+            String aaStr = isAntiAliasing ? "Bilinear AA [A]" : "Point [A]";
             if (isPaused) {
                 parentFrame.setTitle(String.format(
-                    "FastScreen 0.1.1 — PAUSED | %dx%d | Exclusion: %s [E] | [SPACE] Resume | [ESC] Exit",
-                    curW, curH,
-                    isExcluded ? "ON (Transparent Lens)" : "OFF (Droste Mirror)"
+                    "FastScreen 0.1.2 — PAUSED | %dx%d | AA: %s | Excl: %s [E] | [SPACE] Resume | [ESC] Exit",
+                    curW, curH, aaStr,
+                    isExcluded ? "ON" : "OFF"
                 ));
             } else {
                 parentFrame.setTitle(String.format(
-                    "FastScreen 0.1.1 — %.1f FPS | %.2f ms | %dx%d (COVER) | Exclusion: %s [E] | [SPACE] Pause",
-                    currentFps, avgCaptureTimeMs, curW, curH,
-                    isExcluded ? "ON (Transparent Lens)" : "OFF (Droste Mirror)"
+                    "FastScreen 0.1.2 — %.1f FPS | %.2f ms | %dx%d (COVER) | AA: %s | Excl: %s [E] | [SPACE] Pause",
+                    currentFps, avgCaptureTimeMs, curW, curH, aaStr,
+                    isExcluded ? "ON" : "OFF"
                 ));
             }
         });
@@ -245,6 +252,14 @@ public class Demo extends Canvas {
                         int drawH = Math.round(renderBounds[3]);
 
                         Graphics g = bs.getDrawGraphics();
+                        if (g instanceof Graphics2D g2) {
+                            if (isAntiAliasing) {
+                                g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+                                g2.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+                            } else {
+                                g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR);
+                            }
+                        }
 
                         // Render edge-to-edge desktop image with zero margin
                         g.drawImage(displayImage, drawX, drawY, drawW, drawH, null);

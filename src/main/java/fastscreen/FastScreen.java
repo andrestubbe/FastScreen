@@ -1,6 +1,7 @@
 package fastscreen;
 
 import fastcore.FastCore;
+import fastimage.FastImage;
 
 import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
@@ -380,6 +381,35 @@ public class FastScreen {
 
         // ZERO COPY! Returns native memory wrapped in ByteBuffer
         return nativeGetNextFrameDirect();
+    }
+
+    /**
+     * ZERO-COPY FastImage: Wraps the current native frame in a FastImage instance.
+     * Allows immediate SIMD-accelerated Anti-Aliasing (resizeAreaAverage), bilinear scaling,
+     * or blur without copying pixel data to Java heap.
+     *
+     * @return FastImage wrapping the native GPU frame, or null if no new frame
+     */
+    public FastImage getNextFrameImage() {
+        ByteBuffer buf = getNextFrameDirect();
+        if (buf == null) {
+            return null;
+        }
+        return FastImage.wrap(buf, frameWidth, frameHeight);
+    }
+
+    /**
+     * Captures a single screenshot directly into a SIMD-accelerated FastImage.
+     *
+     * @param region Rectangle defining capture bounds
+     * @return FastImage containing captured pixels, or null if capture failed
+     */
+    public FastImage captureImage(Rectangle region) {
+        BufferedImage bi = captureScreen(region);
+        if (bi == null) {
+            return null;
+        }
+        return FastImage.fromBufferedImage(bi);
     }
 
     /**
