@@ -71,6 +71,7 @@ public class Demo {
 - [Window Capture Exclusion](#window-capture-exclusion)
 - [API Quick Reference](#api-quick-reference)
 - [Installation](#installation)
+- [Technical Examples & Hero Demos](#technical-examples--hero-demos)
 - [Documentation](#documentation)
 - [Platform Support](#platform-support)
 - [Related Projects](#related-projects)
@@ -274,6 +275,19 @@ Download the latest pre-compiled JARs directly to add them to your project's cla
 
 > [!IMPORTANT]
 > Both JARs must be present in your classpath for FastScreen's native functions to operate correctly.
+
+---
+
+## Technical Examples & Hero Demos
+
+See the `examples/` directory for ready-to-run interactive implementations, benchmarks, and tests:
+
+| Example / Demo | Description | Path | Run Command |
+|---|---|---|---|
+| **Visual Showcase Hero Demo** | 1173×610 FastTheme interactive window featuring live 240+ FPS desktop duplication, `[E]` Window Exclusion toggle (Droste mirror vs. transparent magic window), `[P]` Pixel Loupe Inspector, and real-time telemetry HUD. | [`examples/Demo/Demo.java`](examples/Demo/src/main/java/fastscreen/Demo.java) | `run-demo.bat` |
+| **High-Precision JMH Benchmarks** | Standardized microbenchmarks measuring capture latency, frame rate throughput, and memory pressure. | [`examples/Benchmark`](examples/Benchmark) | `run-benchmark.bat` |
+| **Basic Single-Shot Capture** | Minimalist screenshot capture saving direct to PNG. | [`examples/00-basic-capture`](examples/00-basic-capture) | `mvn compile exec:java` |
+| **DirectX Smoke Test** | Verifies DXGI output duplication initialization and GPU device handles. | [`examples/01-smoke-test`](examples/01-smoke-test) | `mvn compile exec:java` |
 
 ---
 
