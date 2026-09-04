@@ -66,8 +66,8 @@ public class Demo {
 - [Real-Life Examples & Use Cases](#real-life-examples--use-cases)
 - [Architecture & Hardware Pipeline](#architecture--hardware-pipeline)
 - [Performance Benchmarks](#performance-benchmarks)
-- [Window Capture Exclusion](#window-capture-exclusion)
 - [API Quick Reference](#api-quick-reference)
+- [Window Capture Exclusion](#window-capture-exclusion)
 - [Installation](#installation)
 - [Technical Examples & Hero Demos](#technical-examples--hero-demos)
 - [Documentation](#documentation)
@@ -180,25 +180,6 @@ mvn clean compile exec:java
 
 ---
 
-## Window Capture Exclusion
-
-To make any window invisible to screen capture (so capture tools record whatever is *behind* the window), FastScreen provides direct Win32 display affinity controls:
-
-```java
-// Option A: Exclude by native HWND handle
-FastScreen.excludeWindow(windowHandle);
-
-// Option B: Exclude by window title (automatically enumerates top-level windows)
-FastScreen.excludeWindow("FastVulkan — 120 FPS Mesh Warp");
-
-// Re-include when done
-FastScreen.includeWindow(windowHandle);
-```
-
-Under the hood, FastScreen applies `SetWindowDisplayAffinity(hwnd, 0x00000011)` (`WDA_EXCLUDEFROMCAPTURE`). Both DXGI Desktop Duplication and Win32 GDI honor this flag natively.
-
----
-
 ## API Quick Reference
 
 | Method | Return Type | Description |
@@ -217,6 +198,25 @@ Under the hood, FastScreen applies `SetWindowDisplayAffinity(hwnd, 0x00000011)` 
 | `excludeWindow(String title)` | `boolean` | Makes window invisible to capture by title |
 | `includeWindow(long hwnd)` | `boolean` | Restores normal window capture affinity |
 | `dispose()` | `void` | Releases all GPU and native staging resources |
+
+---
+
+## Window Capture Exclusion
+
+To make any window invisible to screen capture (so capture tools record whatever is *behind* the window), FastScreen provides direct Win32 display affinity controls:
+
+```java
+// Option A: Exclude by native HWND handle
+FastScreen.excludeWindow(windowHandle);
+
+// Option B: Exclude by window title (automatically enumerates top-level windows)
+FastScreen.excludeWindow("FastVulkan — 120 FPS Mesh Warp");
+
+// Re-include when done
+FastScreen.includeWindow(windowHandle);
+```
+
+Under the hood, FastScreen applies `SetWindowDisplayAffinity(hwnd, 0x00000011)` (`WDA_EXCLUDEFROMCAPTURE`). Both DXGI Desktop Duplication and Win32 GDI honor this flag natively.
 
 ---
 
