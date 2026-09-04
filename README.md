@@ -1,6 +1,6 @@
-# FastScreen 0.1.1 [2026-09-04] — High-Performance Native Screen Capture for Java
+# FastScreen 0.1.2 [2026-09-04] — High-Performance Native Screen Capture for Java
 
-[![Status](https://img.shields.io/badge/status-0.1.1-brightgreen.svg)](https://github.com/andrestubbe/FastScreen/releases/tag/0.1.1)
+[![Status](https://img.shields.io/badge/status-0.1.2-brightgreen.svg)](https://github.com/andrestubbe/FastScreen/releases/tag/0.1.2)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Java](https://img.shields.io/badge/Java-17+-blue.svg)](https://www.java.com)
 [![Platform](https://img.shields.io/badge/Platform-Windows%2010+-lightgrey.svg)]()
@@ -239,7 +239,14 @@ FastScreen is distributed via JitPack. It requires **FastCore** as the unified n
     <dependency>
         <groupId>com.github.andrestubbe</groupId>
         <artifactId>FastScreen</artifactId>
-        <version>0.1.1</version>
+        <version>0.1.2</version>
+    </dependency>
+
+    <!-- FastImage Native Bridge & Processing -->
+    <dependency>
+        <groupId>com.github.andrestubbe</groupId>
+        <artifactId>FastImage</artifactId>
+        <version>0.1.2</version>
     </dependency>
 
     <!-- FastCore Native Loader -->
@@ -259,7 +266,8 @@ repositories {
 }
 
 dependencies {
-    implementation 'com.github.andrestubbe:FastScreen:0.1.1'
+    implementation 'com.github.andrestubbe:FastScreen:0.1.2'
+    implementation 'com.github.andrestubbe:FastImage:0.1.2'
     implementation 'com.github.andrestubbe:FastCore:0.1.0'
 }
 ```
@@ -268,8 +276,9 @@ dependencies {
 
 Download the latest pre-compiled JARs directly to add them to your project's classpath:
 
-1. 📦 [**FastScreen-0.1.1.jar**](https://github.com/andrestubbe/FastScreen/releases/tag/0.1.1) (The Core Library)
-2. ⚙️ [**FastCore-0.1.0.jar**](https://github.com/andrestubbe/FastCore/releases/tag/0.1.0) (The Mandatory JNI Loader — for JNI-Native Modules)
+1. 📦 [**FastScreen-0.1.2.jar**](https://github.com/andrestubbe/FastScreen/releases/tag/0.1.2) (The Core Library)
+2. ⚡ [**FastImage-0.1.2.jar**](https://github.com/andrestubbe/FastImage/releases/tag/0.1.2) (The SIMD Image Engine)
+3. ⚙️ [**FastCore-0.1.0.jar**](https://github.com/andrestubbe/FastCore/releases/tag/0.1.0) (The Mandatory JNI Loader)
 
 > [!IMPORTANT]
 > Both JARs must be present in your classpath for FastScreen's native functions to operate correctly.
