@@ -129,13 +129,13 @@ public class Demo extends Canvas {
             String aaStr = isAntiAliasing ? "Bilinear AA [A]" : "Point [A]";
             if (isPaused) {
                 parentFrame.setTitle(String.format(
-                    "FastScreen 0.1.2 — PAUSED | %dx%d | AA: %s | Excl: %s [E] | [SPACE] Resume | [ESC] Exit",
+                    "FastScreen 0.1.3 — PAUSED | %dx%d | AA: %s | Excl: %s [E] | [SPACE] Resume | [ESC] Exit",
                     curW, curH, aaStr,
                     isExcluded ? "ON" : "OFF"
                 ));
             } else {
                 parentFrame.setTitle(String.format(
-                    "FastScreen 0.1.2 — %.1f FPS | %.2f ms | %dx%d (COVER) | AA: %s | Excl: %s [E] | [SPACE] Pause",
+                    "FastScreen 0.1.3 — %.1f FPS | %.2f ms | %dx%d (COVER) | AA: %s | Excl: %s [E] | [SPACE] Pause",
                     currentFps, avgCaptureTimeMs, curW, curH, aaStr,
                     isExcluded ? "ON" : "OFF"
                 ));
@@ -304,7 +304,7 @@ public class Demo extends Canvas {
         System.setProperty("sun.awt.noerasebackground", "true");
 
         SwingUtilities.invokeLater(() -> {
-            JFrame frame = new JFrame("FastScreen 0.1.1 — Desktop Duplication");
+            JFrame frame = new JFrame("FastScreen 0.1.3 — Desktop Duplication");
             frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
             frame.setIgnoreRepaint(true);
             frame.setIconImage(createRoundIcon());

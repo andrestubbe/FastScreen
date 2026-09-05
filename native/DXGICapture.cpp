@@ -4,30 +4,26 @@
  * 
  * @details Implements DirectX 11 based screen capture using DXGI Desktop Duplication
  * API. Provides GPU-accelerated texture capture, hardware scaling via shaders,
- * and triple-buffered frame pooling for smooth streaming.
+ * 64-byte aligned triple-buffered frame pooling, and subresource region cropping.
  * 
  * @par Architecture
  * - D3D11 device creation with BGRA support
  * - DXGI Output Duplication for frame acquisition
- * - Staging texture for CPU readback
- * - Hardware scaling with vertex/pixel shaders
- * - Triple-buffered frame pool (eliminates allocations)
- * 
- * @par Hardware Scaling Pipeline
- * 1. Desktop texture acquired via DXGI
- * 2. Shader resource view created for source
- * 3. Fullscreen quad render to scaled render target
- * 4. BGRA→RGBA swizzle in pixel shader
- * 5. Readback to CPU-accessible staging texture
+ * - Staging texture for CPU readback (with dynamic region resizing)
+ * - CopySubresourceRegion for zero-overhead region capture
+ * - Hardware scaling with cached vertex/pixel shaders and SRV
+ * - 64-byte AVX2/AVX-512 aligned triple-buffered frame pool
+ * - Automatic recovery on DXGI_ERROR_ACCESS_LOST
  * 
  * @author FastJava Team
- * @version 1.0.0
+ * @version 0.1.3
  * @copyright MIT License
  */
 
 #include "fastscreen.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <malloc.h>
 #include <d3d11.h>
 #include <dxgi1_2.h>
 #include <d3dcompiler.h>
@@ -37,7 +33,6 @@
 #pragma comment(lib, "d3dcompiler.lib")
 
 // Embedded HLSL Shaders for hardware scaling
-// Compile with: fxc /T vs_4_0 /E VSMain
 const char* g_vertexShaderCode = R"(
 struct VSInput {
     float2 pos : POSITION;
@@ -56,7 +51,6 @@ PSInput VSMain(VSInput input) {
 )";
 
 // Pixel shader: Sample texture with filter, convert BGRA->RGBA
-// Compile with: fxc /T ps_4_0 /E PSMain
 const char* g_pixelShaderCode = R"(
 Texture2D g_texture : register(t0);
 SamplerState g_sampler : register(s0);
@@ -66,7 +60,6 @@ struct PSInput {
 };
 float4 PSMain(PSInput input) : SV_TARGET {
     float4 color = g_texture.Sample(g_sampler, input.tex);
-    // BGRA to RGBA swizzle
     return float4(color.b, color.g, color.r, color.a);
 }
 )";
@@ -83,8 +76,9 @@ private:
     ID3D11Texture2D* scaledTexture = nullptr;      // Hardware-scaled output (GPU render target)
     ID3D11Texture2D* readbackTexture = nullptr;    // CPU-readable staging for scaled output
     ID3D11RenderTargetView* rtv = nullptr;         // Render target for scaling
-    ID3D11ShaderResourceView* srv = nullptr;       // Source view
-    ID3D11SamplerState* sampler = nullptr;       // Point or Linear filter
+    ID3D11ShaderResourceView* srv = nullptr;       // Source view (cached)
+    ID3D11Resource* lastSrvResource = nullptr;     // Pointer comparison to cache SRV
+    ID3D11SamplerState* sampler = nullptr;         // Point or Linear filter
     ID3D11BlendState* blendState = nullptr;        // No blending needed
     
     // Shader objects
@@ -112,18 +106,54 @@ private:
     bool useScaling = false;
     int scaleFilter = 0;    // 0=Point (fast), 1=Linear (smooth)
     
-    // Frame pooling - eliminate malloc/free per frame
+    // Frame pooling - 64-byte AVX2/AVX-512 aligned memory
     static const int POOL_SIZE = 3;
     int* bufferPool[POOL_SIZE] = {nullptr, nullptr, nullptr};
     int poolIndex = 0;
     bool poolInitialized = false;
 
-    // High-speed Win32 GDI DIBSection fallback when DXGI is unavailable (e.g. non-interactive / headless / RDP)
+    // High-speed Win32 GDI DIBSection fallback when DXGI is unavailable
     bool useGdiFallback = false;
     HDC hdcScreen = nullptr;
     HDC hdcMem = nullptr;
     HBITMAP hBitmap = nullptr;
     void* gdiPixels = nullptr;
+
+    void freeBufferPool() {
+        if (poolInitialized) {
+            for (int i = 0; i < POOL_SIZE; i++) {
+                if (bufferPool[i]) {
+                    _aligned_free(bufferPool[i]);
+                    bufferPool[i] = nullptr;
+                }
+            }
+            poolInitialized = false;
+            poolIndex = 0;
+        }
+        pixelBuffer = nullptr;
+    }
+
+    bool allocateBufferPool(int totalPixels) {
+        if (poolInitialized && bufferSize == totalPixels) {
+            return true;
+        }
+        freeBufferPool();
+
+        bufferSize = totalPixels;
+        for (int i = 0; i < POOL_SIZE; i++) {
+            // 64-byte alignment for AVX2 and AVX-512 cache lines
+            bufferPool[i] = (int*)_aligned_malloc(bufferSize * sizeof(int), 64);
+            if (!bufferPool[i]) {
+                printf("[DXGICapture] Failed to allocate aligned pool buffer %d\n", i);
+                freeBufferPool();
+                return false;
+            }
+        }
+        poolInitialized = true;
+        poolIndex = 0;
+        pixelBuffer = bufferPool[0];
+        return true;
+    }
     
     bool createStagingTexture() {
         if (stagingTexture) {
@@ -131,11 +161,14 @@ private:
             stagingTexture = nullptr;
         }
         
-        // Use capture region size, not full monitor size
         int texWidth = (captureWidth > 0) ? captureWidth : width;
         int texHeight = (captureHeight > 0) ? captureHeight : height;
 
         if (useGdiFallback) {
+            if (hBitmap) { DeleteObject(hBitmap); hBitmap = nullptr; }
+            if (hdcMem) { DeleteDC(hdcMem); hdcMem = nullptr; }
+            if (hdcScreen) { ReleaseDC(NULL, hdcScreen); hdcScreen = nullptr; }
+
             BITMAPINFO bmi = {};
             bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
             bmi.bmiHeader.biWidth = texWidth;
@@ -155,6 +188,8 @@ private:
             return true;
         }
         
+        if (!device) return false;
+
         D3D11_TEXTURE2D_DESC desc = {};
         desc.Width = texWidth;
         desc.Height = texHeight;
@@ -175,13 +210,80 @@ private:
         
         return true;
     }
-    
+
+    bool recreateDuplication() {
+        if (duplication) {
+            duplication->Release();
+            duplication = nullptr;
+        }
+        if (!device) return false;
+
+        IDXGIDevice* dxgiDevice = nullptr;
+        HRESULT hr = device->QueryInterface(__uuidof(IDXGIDevice), (void**)&dxgiDevice);
+        if (FAILED(hr)) return false;
+
+        IDXGIAdapter* dxgiAdapter = nullptr;
+        hr = dxgiDevice->GetParent(__uuidof(IDXGIAdapter), (void**)&dxgiAdapter);
+        dxgiDevice->Release();
+        if (FAILED(hr)) return false;
+
+        IDXGIOutput* dxgiOutput = nullptr;
+        hr = dxgiAdapter->EnumOutputs(outputIndex, &dxgiOutput);
+        dxgiAdapter->Release();
+        if (FAILED(hr)) return false;
+
+        IDXGIOutput1* dxgiOutput1 = nullptr;
+        hr = dxgiOutput->QueryInterface(__uuidof(IDXGIOutput1), (void**)&dxgiOutput1);
+        dxgiOutput->Release();
+        if (FAILED(hr)) return false;
+
+        hr = dxgiOutput1->DuplicateOutput(device, &duplication);
+        dxgiOutput1->Release();
+        if (FAILED(hr)) {
+            printf("[DXGICapture] Failed to recreate Desktop Duplication: 0x%08X\n", hr);
+            return false;
+        }
+
+        printf("[DXGICapture] Desktop Duplication recovered successfully!\n");
+        return true;
+    }
+
 public:
+    DXGICapture() {}
+    
+    ~DXGICapture() {
+        cleanup();
+    }
+
+    // Dynamic region update without destroying the D3D11 device or duplication session
+    bool setRegion(int x, int y, int w, int h) {
+        if (w <= 0 || w > width) w = width;
+        if (h <= 0 || h > height) h = height;
+        if (x < 0) x = 0;
+        if (y < 0) y = 0;
+        if (x + w > width) w = width - x;
+        if (y + h > height) h = height - y;
+
+        bool sizeChanged = (w != captureWidth || h != captureHeight);
+
+        captureX = x;
+        captureY = y;
+        captureWidth = w;
+        captureHeight = h;
+
+        if (sizeChanged && !useScaling) {
+            if (!createStagingTexture()) return false;
+            if (!allocateBufferPool(w * h)) return false;
+        }
+
+        return true;
+    }
+
     // Setup hardware scaling with full D3D11 rendering
     bool setupHardwareScaling(int outW, int outH, int filter) {
         if (!device || !context) return false;
         
-        // Cleanup existing scaling resources (inline to avoid visibility issues)
+        // Cleanup existing scaling resources
         if (rasterState) { rasterState->Release(); rasterState = nullptr; }
         if (vertexBuffer) { vertexBuffer->Release(); vertexBuffer = nullptr; }
         if (inputLayout) { inputLayout->Release(); inputLayout = nullptr; }
@@ -189,7 +291,7 @@ public:
         if (vertexShader) { vertexShader->Release(); vertexShader = nullptr; }
         if (sampler) { sampler->Release(); sampler = nullptr; }
         if (rtv) { rtv->Release(); rtv = nullptr; }
-        if (srv) { srv->Release(); srv = nullptr; }
+        if (srv) { srv->Release(); srv = nullptr; lastSrvResource = nullptr; }
         if (readbackTexture) { readbackTexture->Release(); readbackTexture = nullptr; }
         if (scaledTexture) { scaledTexture->Release(); scaledTexture = nullptr; }
         if (sourceTexture) { sourceTexture->Release(); sourceTexture = nullptr; }
@@ -202,6 +304,10 @@ public:
         
         if (!useScaling) {
             printf("[DXGICapture] Scaling not needed or dimensions match\n");
+            // Re-ensure pool matches raw region
+            int rawW = (captureWidth > 0) ? captureWidth : width;
+            int rawH = (captureHeight > 0) ? captureHeight : height;
+            allocateBufferPool(rawW * rawH);
             return true;
         }
         
@@ -259,7 +365,7 @@ public:
             return false;
         }
         
-        // Create fullscreen quad vertex buffer (2 triangles)
+        // Fullscreen quad
         struct Vertex { float x, y, u, v; };
         Vertex vertices[] = {
             { -1.0f,  1.0f, 0.0f, 0.0f },  // Top-left
@@ -278,7 +384,7 @@ public:
             return false;
         }
         
-        // Create render target texture (GPU-only, bind as render target)
+        // Render target texture (GPU only)
         D3D11_TEXTURE2D_DESC rtDesc = {};
         rtDesc.Width = outW;
         rtDesc.Height = outH;
@@ -294,14 +400,13 @@ public:
             return false;
         }
         
-        // Create render target view
         hr = device->CreateRenderTargetView(scaledTexture, nullptr, &rtv);
         if (FAILED(hr)) {
             printf("[DXGICapture] Failed to create RTV: 0x%08X\n", hr);
             return false;
         }
         
-        // Create readback texture (staging for CPU)
+        // Readback staging texture for CPU
         D3D11_TEXTURE2D_DESC rbDesc = {};
         rbDesc.Width = outW;
         rbDesc.Height = outH;
@@ -317,7 +422,7 @@ public:
             return false;
         }
         
-        // Create sampler
+        // Sampler
         D3D11_SAMPLER_DESC sampDesc = {};
         sampDesc.Filter = (filter == 0) ? D3D11_FILTER_MIN_MAG_MIP_POINT : D3D11_FILTER_MIN_MAG_MIP_LINEAR;
         sampDesc.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
@@ -332,7 +437,7 @@ public:
             return false;
         }
         
-        // Create rasterizer state (no culling, fill mode)
+        // Rasterizer state
         D3D11_RASTERIZER_DESC rasterDesc = {};
         rasterDesc.FillMode = D3D11_FILL_SOLID;
         rasterDesc.CullMode = D3D11_CULL_NONE;
@@ -342,47 +447,22 @@ public:
             return false;
         }
         
-        // Resize buffer pool for scaled output
-        int newBufferSize = outW * outH;
-        if (bufferSize != newBufferSize) {
-            // Cleanup old pool
-            if (poolInitialized) {
-                for (int i = 0; i < POOL_SIZE; i++) {
-                    if (bufferPool[i]) { free(bufferPool[i]); bufferPool[i] = nullptr; }
-                }
-            }
-            // Create new pool with scaled size
-            bufferSize = newBufferSize;
-            for (int i = 0; i < POOL_SIZE; i++) {
-                bufferPool[i] = (int*)malloc(bufferSize * sizeof(int));
-                if (!bufferPool[i]) {
-                    printf("[DXGICapture] Failed to allocate scaled pool buffer %d\n", i);
-                    return false;
-                }
-            }
-            poolInitialized = true;
-            poolIndex = 0;
-            printf("[DXGICapture] Resized frame pool for %dx%d output\n", outW, outH);
+        // Allocate aligned buffer pool for scaled output
+        if (!allocateBufferPool(outW * outH)) {
+            return false;
         }
         
         printf("[DXGICapture] HARDWARE rendering setup complete!\n");
         return true;
     }
-    
-public:
-    DXGICapture() {}
-    
-    ~DXGICapture() {
-        cleanup();
-    }
-    
+
     bool initialize(int monitorIndex = 0, int x = 0, int y = 0, int w = 0, int h = 0) {
         printf("[DXGICapture] Initializing for monitor %d region (%d,%d %dx%d)\n", 
                monitorIndex, x, y, w, h);
         
         HRESULT hr;
+        outputIndex = monitorIndex;
         
-        // Store capture region
         captureX = x;
         captureY = y;
         captureWidth = w;
@@ -393,16 +473,16 @@ public:
         D3D_FEATURE_LEVEL obtainedLevel;
         
         hr = D3D11CreateDevice(
-            nullptr,                    // Adapter (nullptr = default)
-            D3D_DRIVER_TYPE_HARDWARE,   // Driver type
-            nullptr,                    // Software
-            D3D11_CREATE_DEVICE_BGRA_SUPPORT,  // Flags
-            featureLevels,              // Feature levels
-            2,                          // Num feature levels
-            D3D11_SDK_VERSION,          // SDK version
-            &device,                    // Device
-            &obtainedLevel,             // Obtained level
-            &context                    // Context
+            nullptr,
+            D3D_DRIVER_TYPE_HARDWARE,
+            nullptr,
+            D3D11_CREATE_DEVICE_BGRA_SUPPORT,
+            featureLevels,
+            2,
+            D3D11_SDK_VERSION,
+            &device,
+            &obtainedLevel,
+            &context
         );
         
         if (FAILED(hr)) {
@@ -436,7 +516,6 @@ public:
             return false;
         }
         
-        // Get output description for dimensions
         DXGI_OUTPUT_DESC outputDesc;
         hr = dxgiOutput->GetDesc(&outputDesc);
         if (SUCCEEDED(hr)) {
@@ -467,35 +546,21 @@ public:
         hr = dxgiOutput1->DuplicateOutput(device, &duplication);
         dxgiOutput1->Release();
         if (FAILED(hr)) {
-            printf("[DXGICapture] DXGI Desktop Duplication unavailable (0x%08X). Activating high-performance Win32 GDI fallback...\n", hr);
+            printf("[DXGICapture] DXGI Desktop Duplication unavailable (0x%08X). Activating Win32 GDI fallback...\n", hr);
             useGdiFallback = true;
             duplication = nullptr;
         }
         
-        // Create staging texture for capture region size
+        // Create staging texture
         if (!createStagingTexture()) {
             return false;
         }
         
-        // Initialize frame pool
-        bufferSize = captureWidth * captureHeight;
-        if (!poolInitialized) {
-            for (int i = 0; i < POOL_SIZE; i++) {
-                bufferPool[i] = (int*)malloc(bufferSize * sizeof(int));
-                if (!bufferPool[i]) {
-                    printf("[DXGICapture] Failed to allocate pool buffer %d\n", i);
-                    return false;
-                }
-            }
-            poolInitialized = true;
-            poolIndex = 0;
-            printf("[DXGICapture] Frame pool initialized (%d buffers x %d pixels)\n", POOL_SIZE, bufferSize);
+        // Initialize 64-byte aligned frame pool
+        if (!allocateBufferPool(captureWidth * captureHeight)) {
+            return false;
         }
         
-        // Set initial pixel buffer to first pool slot
-        pixelBuffer = bufferPool[0];
-        
-        outputIndex = monitorIndex;
         printf("[DXGICapture] Initialization complete\n");
         return true;
     }
@@ -533,13 +598,21 @@ public:
         IDXGIResource* desktopResource = nullptr;
         DXGI_OUTDUPL_FRAME_INFO frameInfo;
         
-        // Non-blocking acquire next frame (0ms timeout to prevent locking render thread)
+        // Non-blocking acquire next frame (0ms timeout)
         HRESULT hr = duplication->AcquireNextFrame(0, &frameInfo, &desktopResource);
         if (hr == DXGI_ERROR_WAIT_TIMEOUT) {
-            return false; // No new frame right now
+            return false; // No new frame
         }
-        if (FAILED(hr)) {
-            printf("[DXGICapture] Failed to acquire frame: 0x%08X\n", hr);
+        if (hr == DXGI_ERROR_ACCESS_LOST) {
+            printf("[DXGICapture] DXGI_ERROR_ACCESS_LOST detected. Attempting recovery...\n");
+            if (recreateDuplication()) {
+                // Retry once
+                hr = duplication->AcquireNextFrame(0, &frameInfo, &desktopResource);
+                if (FAILED(hr)) return false;
+            } else {
+                return false;
+            }
+        } else if (FAILED(hr)) {
             return false;
         }
         
@@ -554,60 +627,51 @@ public:
         
         // HARDWARE SCALING PATH: Use GPU rendering
         if (useScaling && vertexShader && pixelShader && scaledTexture) {
-            // Create SRV for desktop texture if not exists
-            if (!srv) {
+            // Check if SRV needs to be created or updated (only if desktopTexture changed)
+            if (!srv || lastSrvResource != desktopTexture) {
+                if (srv) {
+                    srv->Release();
+                    srv = nullptr;
+                }
                 hr = device->CreateShaderResourceView(desktopTexture, nullptr, &srv);
                 if (FAILED(hr)) {
                     printf("[DXGICapture] Failed to create SRV: 0x%08X\n", hr);
                     desktopTexture->Release();
                     duplication->ReleaseFrame();
+                    lastSrvResource = nullptr;
                     return false;
                 }
-            } else {
-                // Update SRV to point to new desktop texture
-                srv->Release();
-                hr = device->CreateShaderResourceView(desktopTexture, nullptr, &srv);
-                if (FAILED(hr)) {
-                    printf("[DXGICapture] Failed to update SRV: 0x%08X\n", hr);
-                    desktopTexture->Release();
-                    duplication->ReleaseFrame();
-                    return false;
-                }
+                lastSrvResource = desktopTexture;
             }
             
-            // Set render target
+            // Set render target & viewport
             context->OMSetRenderTargets(1, &rtv, nullptr);
             
-            // Set viewport
             D3D11_VIEWPORT viewport = {};
             viewport.Width = (float)outputWidth;
             viewport.Height = (float)outputHeight;
             viewport.MaxDepth = 1.0f;
             context->RSSetViewports(1, &viewport);
             
-            // Set shaders
+            // Set shaders & pipeline
             context->VSSetShader(vertexShader, nullptr, 0);
             context->PSSetShader(pixelShader, nullptr, 0);
             context->PSSetSamplers(0, 1, &sampler);
             context->PSSetShaderResources(0, 1, &srv);
             
-            // Set input layout and vertex buffer
             context->IASetInputLayout(inputLayout);
-            UINT stride = 16; // 4 floats * 4 bytes
+            UINT stride = 16;
             UINT offset = 0;
             context->IASetVertexBuffers(0, 1, &vertexBuffer, &stride, &offset);
             context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
-            
-            // Set rasterizer state
             context->RSSetState(rasterState);
             
-            // Draw fullscreen quad (4 vertices = 2 triangles)
+            // Draw fullscreen quad
             context->Draw(4, 0);
             
-            // Copy from render target to readback texture
+            // Copy render target to readback texture
             context->CopyResource(readbackTexture, scaledTexture);
             
-            // Map readback texture
             D3D11_MAPPED_SUBRESOURCE mappedResource;
             hr = context->Map(readbackTexture, 0, D3D11_MAP_READ, 0, &mappedResource);
             if (FAILED(hr)) {
@@ -617,11 +681,9 @@ public:
                 return false;
             }
             
-            // Get next buffer from pool
             pixelBuffer = bufferPool[poolIndex];
             poolIndex = (poolIndex + 1) % POOL_SIZE;
             
-            // Copy pixels (already RGBA from shader!)
             BYTE* srcPixels = (BYTE*)mappedResource.pData;
             for (int y = 0; y < outputHeight; y++) {
                 memcpy(&pixelBuffer[y * outputWidth], 
@@ -636,16 +698,28 @@ public:
             *pixels = pixelBuffer;
             *outWidth = outputWidth;
             *outHeight = outputHeight;
-            
             return true;
         }
         
-        // FALLBACK PATH: Original CPU-based conversion (no scaling)
-        // Copy to staging texture
-        context->CopyResource(stagingTexture, desktopTexture);
+        // STANDARD PATH: CPU readback with CopySubresourceRegion support
+        int outW = (captureWidth > 0) ? captureWidth : width;
+        int outH = (captureHeight > 0) ? captureHeight : height;
+
+        bool isSubRegion = (captureX > 0 || captureY > 0 || outW < width || outH < height);
+        if (isSubRegion) {
+            D3D11_BOX box;
+            box.left = (UINT)captureX;
+            box.top = (UINT)captureY;
+            box.front = 0;
+            box.right = (UINT)(captureX + outW);
+            box.bottom = (UINT)(captureY + outH);
+            box.back = 1;
+            context->CopySubresourceRegion(stagingTexture, 0, 0, 0, 0, desktopTexture, 0, &box);
+        } else {
+            context->CopyResource(stagingTexture, desktopTexture);
+        }
         desktopTexture->Release();
         
-        // Map staging texture for CPU read
         D3D11_MAPPED_SUBRESOURCE mappedResource;
         hr = context->Map(stagingTexture, 0, D3D11_MAP_READ, 0, &mappedResource);
         if (FAILED(hr)) {
@@ -653,26 +727,19 @@ public:
             return false;
         }
         
-        // Get next buffer from pool (round-robin)
         pixelBuffer = bufferPool[poolIndex];
         poolIndex = (poolIndex + 1) % POOL_SIZE;
         
-        // Convert BGRA to RGBA - use capture region dimensions
-        int outW = (captureWidth > 0) ? captureWidth : width;
-        int outH = (captureHeight > 0) ? captureHeight : height;
-        
         BYTE* srcPixels = (BYTE*)mappedResource.pData;
         for (int y = 0; y < outH; y++) {
+            const BYTE* rowSrc = &srcPixels[y * mappedResource.RowPitch];
+            int* rowDst = &pixelBuffer[y * outW];
             for (int x = 0; x < outW; x++) {
-                int srcIdx = y * mappedResource.RowPitch + x * 4;
-                int dstIdx = y * outW + x;
-                
-                BYTE b = srcPixels[srcIdx + 0];
-                BYTE g = srcPixels[srcIdx + 1];
-                BYTE r = srcPixels[srcIdx + 2];
-                BYTE a = srcPixels[srcIdx + 3];
-                
-                pixelBuffer[dstIdx] = (a << 24) | (r << 16) | (g << 8) | b;
+                BYTE b = rowSrc[x * 4 + 0];
+                BYTE g = rowSrc[x * 4 + 1];
+                BYTE r = rowSrc[x * 4 + 2];
+                BYTE a = rowSrc[x * 4 + 3];
+                rowDst[x] = (a << 24) | (r << 16) | (g << 8) | b;
             }
         }
         
@@ -682,25 +749,12 @@ public:
         *pixels = pixelBuffer;
         *outWidth = outW;
         *outHeight = outH;
-        
         return true;
     }
     
     void cleanup() {
-        // Free all pooled buffers
-        if (poolInitialized) {
-            for (int i = 0; i < POOL_SIZE; i++) {
-                if (bufferPool[i]) {
-                    free(bufferPool[i]);
-                    bufferPool[i] = nullptr;
-                }
-            }
-            poolInitialized = false;
-            poolIndex = 0;
-        }
-        pixelBuffer = nullptr;
+        freeBufferPool();
         
-        // Release hardware scaling resources
         if (rasterState) { rasterState->Release(); rasterState = nullptr; }
         if (vertexBuffer) { vertexBuffer->Release(); vertexBuffer = nullptr; }
         if (inputLayout) { inputLayout->Release(); inputLayout = nullptr; }
@@ -710,6 +764,7 @@ public:
         if (sampler) { sampler->Release(); sampler = nullptr; }
         if (rtv) { rtv->Release(); rtv = nullptr; }
         if (srv) { srv->Release(); srv = nullptr; }
+        lastSrvResource = nullptr;
         if (readbackTexture) { readbackTexture->Release(); readbackTexture = nullptr; }
         if (scaledTexture) { scaledTexture->Release(); scaledTexture = nullptr; }
         if (sourceTexture) { sourceTexture->Release(); sourceTexture = nullptr; }
@@ -749,7 +804,8 @@ public:
         height = 0;
         bufferSize = 0;
     }
-       int getWidth() const { return (outputWidth > 0) ? outputWidth : ((captureWidth > 0) ? captureWidth : width); }
+
+    int getWidth() const { return (outputWidth > 0) ? outputWidth : ((captureWidth > 0) ? captureWidth : width); }
     int getHeight() const { return (outputHeight > 0) ? outputHeight : ((captureHeight > 0) ? captureHeight : height); }
 };
 
@@ -760,22 +816,28 @@ extern "C" {
         return new DXGICapture();
     }
     
-    // Legacy initialize (full screen)
     bool dxgiInitialize(void* capture, int monitorIndex) {
+        if (!capture) return false;
         return static_cast<DXGICapture*>(capture)->initialize(monitorIndex, 0, 0, 0, 0);
     }
     
-    // Region-based initialize
     bool dxgiInitializeRegion(void* capture, int monitorIndex, int x, int y, int w, int h) {
+        if (!capture) return false;
         return static_cast<DXGICapture*>(capture)->initialize(monitorIndex, x, y, w, h);
     }
+
+    bool dxgiSetRegion(void* capture, int x, int y, int w, int h) {
+        if (!capture) return false;
+        return static_cast<DXGICapture*>(capture)->setRegion(x, y, w, h);
+    }
     
-    // Setup hardware scaling (output size and filter: 0=Point, 1=Linear)
     bool dxgiSetupScaling(void* capture, int outW, int outH, int filter) {
+        if (!capture) return false;
         return static_cast<DXGICapture*>(capture)->setupHardwareScaling(outW, outH, filter);
     }
     
     bool dxgiCaptureFrame(void* capture, int** pixels, int* width, int* height) {
+        if (!capture) return false;
         return static_cast<DXGICapture*>(capture)->captureFrame(pixels, width, height);
     }
 
@@ -790,6 +852,30 @@ extern "C" {
     }
     
     void dxgiDestroyCapture(void* capture) {
-        delete static_cast<DXGICapture*>(capture);
+        if (capture) {
+            delete static_cast<DXGICapture*>(capture);
+        }
+    }
+
+    int dxgiQueryMonitorCount() {
+        IDXGIFactory1* factory = nullptr;
+        HRESULT hr = CreateDXGIFactory1(__uuidof(IDXGIFactory1), (void**)&factory);
+        if (FAILED(hr) || !factory) {
+            return 1;
+        }
+
+        int totalOutputs = 0;
+        IDXGIAdapter1* adapter = nullptr;
+        for (UINT i = 0; factory->EnumAdapters1(i, &adapter) != DXGI_ERROR_NOT_FOUND; ++i) {
+            IDXGIOutput* output = nullptr;
+            for (UINT j = 0; adapter->EnumOutputs(j, &output) != DXGI_ERROR_NOT_FOUND; ++j) {
+                totalOutputs++;
+                output->Release();
+            }
+            adapter->Release();
+        }
+        factory->Release();
+        return (totalOutputs > 0) ? totalOutputs : 1;
     }
 }
+

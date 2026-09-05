@@ -46,40 +46,52 @@ extern "C" {
  *  @{ */
 
 /**
- * @brief Initialize native capture for full screen
+ * @brief Initialize native capture for full screen on specified monitor
  * @param env JNI environment pointer
  * @param obj FastScreen Java object
+ * @param monitorIndex 0-based monitor index
  * @return jlong Native handle (DXGICapture*), or 0 on failure
- * @note Creates DXGI capture instance for primary monitor
- * @see Java_fastscreen_FastScreen_nativeInitRegion
  */
-JNIEXPORT jlong JNICALL Java_fastscreen_FastScreen_nativeInit(JNIEnv* env, jobject obj);
+JNIEXPORT jlong JNICALL Java_fastscreen_FastScreen_nativeInit(JNIEnv* env, jobject obj, jint monitorIndex);
 
 /**
  * @brief Initialize native capture for specific screen region
  * @param env JNI environment pointer
  * @param obj FastScreen Java object
+ * @param monitorIndex 0-based monitor index
  * @param x Region X coordinate
  * @param y Region Y coordinate
  * @param w Region width
  * @param h Region height
  * @return jlong Native handle, or 0 on failure
- * @note Region is clipped to monitor bounds automatically
  */
-JNIEXPORT jlong JNICALL Java_fastscreen_FastScreen_nativeInitRegion(JNIEnv* env, jobject obj, jint x, jint y, jint w, jint h);
+JNIEXPORT jlong JNICALL Java_fastscreen_FastScreen_nativeInitRegion(JNIEnv* env, jobject obj, jint monitorIndex, jint x, jint y, jint w, jint h);
+
+/**
+ * @brief Dynamically set capture region on existing capture instance
+ * @param env JNI environment pointer
+ * @param obj FastScreen Java object
+ * @param handle Native handle
+ * @param x Region X coordinate
+ * @param y Region Y coordinate
+ * @param w Region width
+ * @param h Region height
+ * @return jboolean JNI_TRUE if region was updated
+ */
+JNIEXPORT jboolean JNICALL Java_fastscreen_FastScreen_nativeSetRegion(JNIEnv* env, jobject obj, jlong handle, jint x, jint y, jint w, jint h);
 
 /**
  * @brief Capture single frame as RGBA int array
  * @param env JNI environment pointer
  * @param obj FastScreen Java object
+ * @param handle Native handle
  * @param x Capture X offset
  * @param y Capture Y offset
  * @param width Capture width
  * @param height Capture height
  * @return jintArray RGBA pixel data, or null if no new frame
- * @note Returns null if desktop hasn't changed
  */
-JNIEXPORT jintArray JNICALL Java_fastscreen_FastScreen_nativeCaptureScreen(JNIEnv* env, jobject obj, jint x, jint y, jint width, jint height);
+JNIEXPORT jintArray JNICALL Java_fastscreen_FastScreen_nativeCaptureScreen(JNIEnv* env, jobject obj, jlong handle, jint x, jint y, jint width, jint height);
 
 /** @} */
 
@@ -91,29 +103,52 @@ JNIEXPORT jintArray JNICALL Java_fastscreen_FastScreen_nativeCaptureScreen(JNIEn
  * @brief Start continuous streaming capture mode
  * @param env JNI environment pointer
  * @param obj FastScreen Java object
+ * @param handle Native handle
  * @param x Stream region X
  * @param y Stream region Y
  * @param width Stream region width
  * @param height Stream region height
  * @return jboolean JNI_TRUE if streaming started
- * @note Creates separate capture instance for streaming
  */
-JNIEXPORT jboolean JNICALL Java_fastscreen_FastScreen_nativeStartStream(JNIEnv* env, jobject obj, jint x, jint y, jint width, jint height);
+JNIEXPORT jboolean JNICALL Java_fastscreen_FastScreen_nativeStartStream(JNIEnv* env, jobject obj, jlong handle, jint x, jint y, jint width, jint height);
 
 /**
  * @brief Get next frame from streaming capture (int array)
  * @param env JNI environment pointer
  * @param obj FastScreen Java object
+ * @param handle Native handle
  * @return jintArray RGBA pixel data, or null if no new frame
  */
-JNIEXPORT jintArray JNICALL Java_fastscreen_FastScreen_nativeGetNextFrame(JNIEnv* env, jobject obj);
+JNIEXPORT jintArray JNICALL Java_fastscreen_FastScreen_nativeGetNextFrame(JNIEnv* env, jobject obj, jlong handle);
+
+/**
+ * @brief Get next frame as DirectByteBuffer (zero-copy)
+ * @param env JNI environment pointer
+ * @param obj FastScreen Java object
+ * @param handle Native handle
+ * @return jobject DirectByteBuffer pointing to native pixel data
+ */
+JNIEXPORT jobject JNICALL Java_fastscreen_FastScreen_nativeGetNextFrameDirect(JNIEnv* env, jobject obj, jlong handle);
 
 /**
  * @brief Stop streaming capture mode
  * @param env JNI environment pointer
  * @param obj FastScreen Java object
+ * @param handle Native handle
  */
-JNIEXPORT void JNICALL Java_fastscreen_FastScreen_nativeStopStream(JNIEnv* env, jobject obj);
+JNIEXPORT void JNICALL Java_fastscreen_FastScreen_nativeStopStream(JNIEnv* env, jobject obj, jlong handle);
+
+/**
+ * @brief Configure hardware scaling for streaming
+ * @param env JNI environment pointer
+ * @param obj FastScreen Java object
+ * @param handle Native handle
+ * @param outW Output width
+ * @param outH Output height
+ * @param filter Filter mode (0=Point, 1=Linear)
+ * @return jboolean JNI_TRUE if scaling configured
+ */
+JNIEXPORT jboolean JNICALL Java_fastscreen_FastScreen_nativeSetupHardwareScaling(JNIEnv* env, jobject obj, jlong handle, jint outW, jint outH, jint filter);
 
 /** @} */
 
@@ -125,38 +160,38 @@ JNIEXPORT void JNICALL Java_fastscreen_FastScreen_nativeStopStream(JNIEnv* env, 
  * @brief Get color of single pixel at coordinates
  * @param env JNI environment pointer
  * @param obj FastScreen Java object
+ * @param handle Native handle
  * @param x Pixel X coordinate
  * @param y Pixel Y coordinate
  * @return jint RGBA color value
  */
-JNIEXPORT jint JNICALL Java_fastscreen_FastScreen_nativeGetPixelColor(JNIEnv* env, jobject obj, jint x, jint y);
+JNIEXPORT jint JNICALL Java_fastscreen_FastScreen_nativeGetPixelColor(JNIEnv* env, jobject obj, jlong handle, jint x, jint y);
 
 /**
  * @brief Release all native resources
  * @param env JNI environment pointer
  * @param obj FastScreen Java object
- * @param handle Native handle (unused)
- * @note Stops streaming and releases all resources
+ * @param handle Native handle
  */
 JNIEXPORT void JNICALL Java_fastscreen_FastScreen_nativeDispose(JNIEnv* env, jobject obj, jlong handle);
 
 /**
  * @brief Get number of connected monitors
  * @param env JNI environment pointer
- * @param obj FastScreen Java object
+ * @param cls FastScreen Java class
  * @return jint Number of monitors
  */
-JNIEXPORT jint JNICALL Java_fastscreen_FastScreen_nativeGetMonitorCount(JNIEnv* env, jobject obj);
+JNIEXPORT jint JNICALL Java_fastscreen_FastScreen_nativeGetMonitorCount(JNIEnv* env, jclass cls);
 
 /**
  * @brief Get current frame width
  */
-JNIEXPORT jint JNICALL Java_fastscreen_FastScreen_nativeGetFrameWidth(JNIEnv* env, jobject obj);
+JNIEXPORT jint JNICALL Java_fastscreen_FastScreen_nativeGetFrameWidth(JNIEnv* env, jobject obj, jlong handle);
 
 /**
  * @brief Get current frame height
  */
-JNIEXPORT jint JNICALL Java_fastscreen_FastScreen_nativeGetFrameHeight(JNIEnv* env, jobject obj);
+JNIEXPORT jint JNICALL Java_fastscreen_FastScreen_nativeGetFrameHeight(JNIEnv* env, jobject obj, jlong handle);
 
 /**
  * @brief Set window display affinity to exclude or include from screen capture

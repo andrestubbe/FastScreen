@@ -17,16 +17,16 @@ import java.nio.ByteBuffer;
  * <ul>
  *   <li>Single screenshot capture (BufferedImage, raw pixels, or zero-copy FastImage)</li>
  *   <li>High-FPS streaming mode for real-time computer vision and rendering</li>
- *   <li>Zero GC pressure with native DirectByteBuffer buffers and frame pooling</li>
+ *   <li>Zero GC pressure with native DirectByteBuffer buffers and 64-byte aligned frame pooling</li>
  *   <li>Hardware GPU scaling (Point and Bilinear AA via embedded HLSL shaders)</li>
  *   <li>Native Window Capture Exclusion (Win32 display affinity)</li>
- *   <li>Multi-monitor support and resilient GDI fallback</li>
+ *   <li>Multi-monitor enumeration and capture support with resilient GDI fallback</li>
+ *   <li>Safe lifecycle management via {@link AutoCloseable} and instance handles</li>
  * </ul></p>
  *
  * <p><strong>Example usage:</strong></p>
  * <pre>{@code
- * FastScreen screen = new FastScreen();
- * try {
+ * try (FastScreen screen = new FastScreen()) {
  *     // Single capture
  *     BufferedImage img = screen.captureScreen(new Rectangle(0, 0, 1920, 1080));
  *
@@ -39,16 +39,14 @@ import java.nio.ByteBuffer;
  *         }
  *     }
  *     screen.stopStream();
- * } finally {
- *     screen.dispose();
  * }
  * }</pre>
  *
  * @author Andre Stubbe
- * @version 0.1.2
+ * @version 0.1.3
  * @since 2026-04-16
  */
-public class FastScreen {
+public class FastScreen implements AutoCloseable {
 
     static {
         // Load native library via FastCore
@@ -56,6 +54,7 @@ public class FastScreen {
     }
 
     private long nativeHandle = 0;
+    private final int monitorIndex;
     private boolean streaming = false;
     private int frameWidth = 0;
     private int frameHeight = 0;
@@ -78,12 +77,22 @@ public class FastScreen {
     private volatile double currentStreamingFps = 0.0;
 
     /**
-     * Creates a new FastScreen instance.
+     * Creates a new FastScreen instance for the primary monitor (index 0).
      */
     public FastScreen() {
-        nativeHandle = nativeInit();
-        if (nativeHandle == 0) {
-            throw new RuntimeException("Failed to initialize FastScreen native library");
+        this(0);
+    }
+
+    /**
+     * Creates a new FastScreen instance for a specific monitor index.
+     *
+     * @param monitorIndex 0-based monitor index
+     */
+    public FastScreen(int monitorIndex) {
+        this.monitorIndex = monitorIndex;
+        this.nativeHandle = nativeInit(monitorIndex);
+        if (this.nativeHandle == 0) {
+            throw new RuntimeException("Failed to initialize FastScreen native library for monitor " + monitorIndex);
         }
     }
 
@@ -132,27 +141,15 @@ public class FastScreen {
      * @return int array of RGBA pixels, or null if capture failed
      */
     public int[] captureRaw(int x, int y, int width, int height) {
-        // Check if we need to reinitialize for a different region
+        if (nativeHandle == 0) {
+            return null;
+        }
+
+        // Seamless dynamic region update without tearing down the D3D11 device
         if (width != captureWidth || height != captureHeight ||
                 x != captureX || y != captureY) {
-            // Dispose old capture
-            if (nativeHandle != 0) {
-                nativeDispose(nativeHandle);
-            }
-            // Reinitialize with new region
-            nativeHandle = nativeInitRegion(x, y, width, height);
-            if (nativeHandle == 0) {
-                // Fall back to full screen
-                nativeHandle = nativeInit();
-                if (nativeHandle == 0) {
-                    return null;
-                }
-                // Update region to full screen
-                captureX = 0;
-                captureY = 0;
-                captureWidth = 0; // Will be determined by native
-                captureHeight = 0;
-            } else {
+            boolean updated = nativeSetRegion(nativeHandle, x, y, width, height);
+            if (updated) {
                 captureX = x;
                 captureY = y;
                 captureWidth = width;
@@ -160,10 +157,10 @@ public class FastScreen {
             }
         }
 
-        int[] pixels = nativeCaptureScreen(x, y, width, height);
+        int[] pixels = nativeCaptureScreen(nativeHandle, x, y, width, height);
         if (pixels != null) {
-            int w = nativeGetFrameWidth();
-            int h = nativeGetFrameHeight();
+            int w = nativeGetFrameWidth(nativeHandle);
+            int h = nativeGetFrameHeight(nativeHandle);
             lastFrameWidth = (w > 0) ? w : width;
             lastFrameHeight = (h > 0) ? h : height;
         }
@@ -171,14 +168,29 @@ public class FastScreen {
     }
 
     /**
-     * Captures entire monitor.
+     * Captures a single screenshot directly into a SIMD-accelerated FastImage.
+     *
+     * @param region Rectangle defining capture bounds
+     * @return FastImage containing captured pixels, or null if capture failed
+     */
+    public FastImage captureImage(Rectangle region) {
+        BufferedImage bi = captureScreen(region);
+        if (bi == null) {
+            return null;
+        }
+        return FastImage.fromBufferedImage(bi);
+    }
+
+    /**
+     * Captures entire monitor by index.
      *
      * @param monitorIndex Monitor index (0-based)
      * @return BufferedImage of monitor
      */
-    public BufferedImage captureMonitor(int monitorIndex) {
-        // TODO: Implement monitor capture
-        throw new UnsupportedOperationException("Not yet implemented");
+    public static BufferedImage captureMonitor(int monitorIndex) {
+        try (FastScreen screen = new FastScreen(monitorIndex)) {
+            return screen.captureScreen();
+        }
     }
 
     /**
@@ -191,7 +203,10 @@ public class FastScreen {
      * @return true if streaming started successfully
      */
     public boolean startStream(int x, int y, int width, int height) {
-        boolean success = nativeStartStream(x, y, width, height);
+        if (nativeHandle == 0) {
+            return false;
+        }
+        boolean success = nativeStartStream(nativeHandle, x, y, width, height);
         if (success) {
             this.streaming = true;
             this.frameWidth = width;
@@ -209,8 +224,8 @@ public class FastScreen {
      * Stops streaming capture.
      */
     public void stopStream() {
-        if (streaming) {
-            nativeStopStream();
+        if (streaming && nativeHandle != 0) {
+            nativeStopStream(nativeHandle);
             this.streaming = false;
             // Clear any buffered frame
             bufferedFrame = null;
@@ -220,6 +235,26 @@ public class FastScreen {
                 this.fpsFrameCount = 0;
                 this.currentStreamingFps = 0.0;
             }
+        }
+    }
+
+    /**
+     * Records a received frame timestamp for real-time FPS throughput calculation.
+     */
+    private synchronized void recordFrameReceived() {
+        long now = System.nanoTime();
+        if (fpsStartTimeNanos == 0) {
+            fpsStartTimeNanos = now;
+            fpsFrameCount = 1;
+            return;
+        }
+
+        fpsFrameCount++;
+        long elapsedNanos = now - fpsStartTimeNanos;
+        if (elapsedNanos >= 250_000_000L) { // Update FPS every 250 ms
+            currentStreamingFps = (fpsFrameCount * 1_000_000_000.0) / elapsedNanos;
+            fpsStartTimeNanos = now;
+            fpsFrameCount = 0;
         }
     }
 
@@ -234,11 +269,11 @@ public class FastScreen {
      * @return true if hardware scaling was enabled
      */
     public boolean enableHardwareScaling(int outputWidth, int outputHeight, boolean useLinearFilter) {
-        if (!streaming) {
+        if (!streaming || nativeHandle == 0) {
             throw new IllegalStateException("Must call startStream() before enableHardwareScaling()");
         }
         int filter = useLinearFilter ? 1 : 0;
-        boolean success = nativeSetupHardwareScaling(outputWidth, outputHeight, filter);
+        boolean success = nativeSetupHardwareScaling(nativeHandle, outputWidth, outputHeight, filter);
         if (success) {
             this.frameWidth = outputWidth;
             this.frameHeight = outputHeight;
@@ -287,6 +322,14 @@ public class FastScreen {
     }
 
     /**
+     * Releases native resources. Implements {@link AutoCloseable#close()}.
+     */
+    @Override
+    public void close() {
+        dispose();
+    }
+
+    /**
      * Releases native resources.
      */
     public void dispose() {
@@ -306,7 +349,7 @@ public class FastScreen {
      * @return true if new frame available
      */
     public boolean hasNewFrame() {
-        if (!streaming) {
+        if (!streaming || nativeHandle == 0) {
             return false;
         }
 
@@ -316,7 +359,7 @@ public class FastScreen {
         }
 
         // Try to get next frame from native
-        bufferedFrame = nativeGetNextFrame();
+        bufferedFrame = nativeGetNextFrame(nativeHandle);
         frameBuffered = (bufferedFrame != null);
         return frameBuffered;
     }
@@ -329,7 +372,8 @@ public class FastScreen {
      * @return RGBA color value
      */
     public int getPixelColor(int x, int y) {
-        return nativeGetPixelColor(x, y);
+        if (nativeHandle == 0) return 0;
+        return nativeGetPixelColor(nativeHandle, x, y);
     }
 
     /**
@@ -340,19 +384,17 @@ public class FastScreen {
      * @return int array of RGBA pixels, or null if no new frame
      */
     public int[] getNextFrame() {
-        if (!streaming) {
+        if (!streaming || nativeHandle == 0) {
             return null;
         }
 
         int[] frame;
-        // If we have a buffered frame from hasNewFrame(), return it
         if (frameBuffered && bufferedFrame != null) {
             frame = bufferedFrame;
             bufferedFrame = null;
             frameBuffered = false;
         } else {
-            // Otherwise poll native directly
-            frame = nativeGetNextFrame();
+            frame = nativeGetNextFrame(nativeHandle);
         }
 
         if (frame != null) {
@@ -369,36 +411,15 @@ public class FastScreen {
      * @return DirectByteBuffer of RGBA pixels, or null if no new frame
      */
     public ByteBuffer getNextFrameDirect() {
-        if (!streaming) {
+        if (!streaming || nativeHandle == 0) {
             return null;
         }
 
-        // ZERO COPY! Returns native memory wrapped in ByteBuffer
-        ByteBuffer buf = nativeGetNextFrameDirect();
+        ByteBuffer buf = nativeGetNextFrameDirect(nativeHandle);
         if (buf != null) {
             recordFrameReceived();
         }
         return buf;
-    }
-
-    /**
-     * Records a received frame timestamp for real-time FPS throughput calculation.
-     */
-    private synchronized void recordFrameReceived() {
-        long now = System.nanoTime();
-        if (fpsStartTimeNanos == 0) {
-            fpsStartTimeNanos = now;
-            fpsFrameCount = 1;
-            return;
-        }
-
-        fpsFrameCount++;
-        long elapsedNanos = now - fpsStartTimeNanos;
-        if (elapsedNanos >= 250_000_000L) { // Update FPS every 250 ms
-            currentStreamingFps = (fpsFrameCount * 1_000_000_000.0) / elapsedNanos;
-            fpsStartTimeNanos = now;
-            fpsFrameCount = 0;
-        }
     }
 
     /**
@@ -414,20 +435,6 @@ public class FastScreen {
             return null;
         }
         return FastImage.wrap(buf, frameWidth, frameHeight);
-    }
-
-    /**
-     * Captures a single screenshot directly into a SIMD-accelerated FastImage.
-     *
-     * @param region Rectangle defining capture bounds
-     * @return FastImage containing captured pixels, or null if capture failed
-     */
-    public FastImage captureImage(Rectangle region) {
-        BufferedImage bi = captureScreen(region);
-        if (bi == null) {
-            return null;
-        }
-        return FastImage.fromBufferedImage(bi);
     }
 
     /**
@@ -447,8 +454,37 @@ public class FastScreen {
      *
      * @return Monitor count
      */
-    public int getMonitorCount() {
+    public static int getMonitorCount() {
         return nativeGetMonitorCount();
+    }
+
+    /**
+     * Gets current frame width.
+     *
+     * @return frame width in pixels
+     */
+    public int getFrameWidth() {
+        if (nativeHandle == 0) return 0;
+        return nativeGetFrameWidth(nativeHandle);
+    }
+
+    /**
+     * Gets current frame height.
+     *
+     * @return frame height in pixels
+     */
+    public int getFrameHeight() {
+        if (nativeHandle == 0) return 0;
+        return nativeGetFrameHeight(nativeHandle);
+    }
+
+    /**
+     * Gets the monitor index associated with this capture instance.
+     *
+     * @return 0-based monitor index
+     */
+    public int getMonitorIndex() {
+        return monitorIndex;
     }
 
     /**
@@ -463,43 +499,37 @@ public class FastScreen {
         return nativeSetWindowExcluded(hwnd, exclude);
     }
 
-    @Override
-    protected void finalize() throws Throwable {
-        try {
-            dispose();
-        } finally {
-            super.finalize();
-        }
-    }
-
     // Native methods
-    private native long nativeInit();
+    private static native long nativeInit(int monitorIndex);
 
-    private native long nativeInitRegion(int x, int y, int width, int height);
+    private static native long nativeInitRegion(int monitorIndex, int x, int y, int width, int height);
 
-    private native int[] nativeCaptureScreen(int x, int y, int width, int height);
+    private static native boolean nativeSetRegion(long handle, int x, int y, int width, int height);
 
-    private native boolean nativeStartStream(int x, int y, int width, int height);
+    private static native int[] nativeCaptureScreen(long handle, int x, int y, int width, int height);
 
-    private native int[] nativeGetNextFrame();
+    private static native boolean nativeStartStream(long handle, int x, int y, int width, int height);
 
-    private native ByteBuffer nativeGetNextFrameDirect();  // ZERO-COPY!
+    private static native int[] nativeGetNextFrame(long handle);
 
-    private native void nativeStopStream();
+    private static native ByteBuffer nativeGetNextFrameDirect(long handle);
 
-    private native boolean nativeSetupHardwareScaling(int outW, int outH, int filter);
+    private static native void nativeStopStream(long handle);
 
-    private native int nativeGetPixelColor(int x, int y);
+    private static native boolean nativeSetupHardwareScaling(long handle, int outW, int outH, int filter);
 
-    private native void nativeDispose(long handle);
+    private static native int nativeGetPixelColor(long handle, int x, int y);
 
-    private native int nativeGetMonitorCount();
+    private static native void nativeDispose(long handle);
 
-    private native int nativeGetFrameWidth();
+    private static native int nativeGetMonitorCount();
 
-    private native int nativeGetFrameHeight();
+    private static native int nativeGetFrameWidth(long handle);
+
+    private static native int nativeGetFrameHeight(long handle);
 
     private static native boolean nativeSetWindowExcluded(long hwnd, boolean exclude);
 
     private static native boolean nativeSetWindowExcludedByTitle(String title, boolean exclude);
 }
+
