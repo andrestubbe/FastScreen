@@ -171,17 +171,20 @@ For over two decades, Java developers needing screen capture have been constrain
 | `captureScreen()` | `BufferedImage` | Captures full desktop screen |
 | `captureScreen(Rectangle rect)` | `BufferedImage` | Captures specified sub-rectangle |
 | `captureRaw(int x, int y, int w, int h)` | `int[]` | Returns raw RGBA pixel array |
+| `captureImage(Rectangle rect)` | `FastImage` | Captures sub-rectangle directly into off-heap FastImage |
 | `startStream(int x, int y, int w, int h)` | `boolean` | Starts continuous high-FPS streaming capture |
 | `enableHardwareScaling(int w, int h, boolean smooth)` | `boolean` | Configures GPU shader downsampling |
-| `hasNewFrame()` | `boolean` | Checks if a new frame is ready from DWM |
+| `pollNewFrame()` | `boolean` | Non-allocating frame check (0 GC allocations) |
+| `getNextFrame(int[] dest)` | `boolean` | **Zero-GC**: Fills pre-allocated array directly |
 | `getNextFrame()` | `int[]` | Retrieves next frame from triple-buffered pool |
-| `getNextFrameDirect()` | `ByteBuffer` | **Zero-Copy**: Returns direct native pointer |
+| `getNextFrameDirect()` | `ByteBuffer` | **Zero-Copy**: Returns direct native pointer (transient) |
+| `getNextFrameImage()` | `FastImage` | **Zero-Copy**: Wraps native frame into FastImage |
 | `stopStream()` | `void` | Stops continuous streaming |
 | `getPixelColor(int x, int y)` | `int` | Fast single-pixel RGBA lookup |
 | `excludeWindow(long hwnd)` | `boolean` | Makes window invisible to capture by handle |
 | `excludeWindow(String title)` | `boolean` | Makes window invisible to capture by title |
 | `includeWindow(long hwnd)` | `boolean` | Restores normal window capture affinity |
-| `dispose()` | `void` | Releases all GPU and native staging resources |
+| `close()` / `dispose()` | `void` | Releases all GPU and native staging resources |
 
 ---
 

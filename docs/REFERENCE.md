@@ -110,5 +110,3 @@ Stops continuous capture and releases stream-specific textures and staging buffe
 ---
 
 **Part of the FastJava Ecosystem** — *Making the JVM faster. ⚡*
-
-Made with ⚡ by Andre Stubbe

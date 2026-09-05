@@ -83,13 +83,17 @@ FastScreen/
 │   ├── fastscreen.h           # JNI declarations
 │   ├── fastscreen.cpp         # JNI bridge & window exclusion
 │   └── DXGICapture.cpp        # DirectX 11 & GDI fallback engine
-├── examples/                   # Standalone runnable demos
-│   ├── 00-basic-capture/      # Simple screenshot demo
+├── examples/                   # Standalone runnable demos & benchmarks
+│   ├── Demo/                   # Visual Showcase Hero Demo (FastTheme, AA, COVER)
+│   ├── Benchmark/              # JMH Microbenchmark Suite
+│   ├── 00-basic-capture/       # Simple screenshot demo
 │   ├── 01-smoke-test/          # Library loading verification
 │   ├── 02-streaming-viewer/    # Real-time streaming viewer
-│   └── 03-benchmark/           # Full performance benchmark suite
+│   └── 03-benchmark/           # Quick console benchmark
 ├── docs/                       # Architectural documentation
 ├── compile.bat                 # Automated VS compiler script
+├── run-demo.bat                # Launch Hero Demo
+├── run-benchmark.bat           # Run JMH Benchmark Suite
 └── pom.xml                     # Maven build configuration
 ```
 
