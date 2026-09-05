@@ -112,8 +112,10 @@ public class FastScreen implements AutoCloseable {
         if (pixels == null) {
             return null;
         }
-        int w = lastFrameWidth > 0 ? lastFrameWidth : 1920;
-        int h = lastFrameHeight > 0 ? lastFrameHeight : 1080;
+        int w = getFrameWidth();
+        int h = getFrameHeight();
+        if (w <= 0) w = (lastFrameWidth > 0) ? lastFrameWidth : 1920;
+        if (h <= 0) h = (lastFrameHeight > 0) ? lastFrameHeight : 1080;
         return wrapPixelsToBufferedImage(pixels, w, h);
     }
 
@@ -128,8 +130,10 @@ public class FastScreen implements AutoCloseable {
         if (pixels == null) {
             return null;
         }
-        int w = lastFrameWidth > 0 ? lastFrameWidth : rect.width;
-        int h = lastFrameHeight > 0 ? lastFrameHeight : rect.height;
+        int w = getFrameWidth();
+        int h = getFrameHeight();
+        if (w <= 0) w = (lastFrameWidth > 0) ? lastFrameWidth : rect.width;
+        if (h <= 0) h = (lastFrameHeight > 0) ? lastFrameHeight : rect.height;
         return wrapPixelsToBufferedImage(pixels, w, h);
     }
 
@@ -325,6 +329,9 @@ public class FastScreen implements AutoCloseable {
     }
 
     private static BufferedImage wrapPixelsToBufferedImage(int[] pixels, int w, int h) {
+        if (pixels == null || w <= 0 || h <= 0 || (long) w * h > pixels.length) {
+            return null;
+        }
         DataBufferInt buffer = new DataBufferInt(pixels, pixels.length);
         int[] masks = {0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000};
         SinglePixelPackedSampleModel sm =

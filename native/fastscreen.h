@@ -25,7 +25,7 @@
  * - Desktop Composition enabled
  * 
  * @author FastJava Team
- * @version 1.0.0
+ * @version 0.1.3
  * @copyright MIT License
  */
 

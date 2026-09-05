@@ -115,30 +115,66 @@ public class StreamingViewer extends JFrame {
         System.out.println("Stream started");
     }
     
-    private final java.util.concurrent.atomic.AtomicReference<int[]> pendingFrame = new java.util.concurrent.atomic.AtomicReference<>();
+    private static final int SLOT_FREE = 0;
+    private static final int SLOT_WRITING = 1;
+    private static final int SLOT_READY = 2;
+    private static final int SLOT_READING = 3;
+    private final java.util.concurrent.atomic.AtomicIntegerArray slotStates = new java.util.concurrent.atomic.AtomicIntegerArray(3);
+    private int[][] viewerBuffers;
     
     private void captureLoop() {
         long totalCaptureTime = 0;
         int captureCount = 0;
         
-        // Double-buffer pool for decoupling worker and UI
-        int[][] buffers = new int[2][frameWidth * frameHeight];
-        int bufIdx = 0;
+        // Triple-buffer pool for lock-free decoupling
+        viewerBuffers = new int[3][frameWidth * frameHeight];
+        int writeSlot = 0;
+        slotStates.set(writeSlot, SLOT_WRITING);
         
         while (running) {
             long startTime = System.nanoTime();
             
-            // Capture directly into reusable array
-            boolean gotFrame = screen.getNextFrame(buffers[bufIdx]);
+            // Capture directly into pre-allocated slot
+            boolean gotFrame = screen.getNextFrame(viewerBuffers[writeSlot]);
             
             if (gotFrame) {
                 long captureTime = System.nanoTime() - startTime;
                 totalCaptureTime += captureTime;
                 captureCount++;
                 
-                // Publish current buffer to UI and flip to next
-                pendingFrame.set(buffers[bufIdx]);
-                bufIdx = 1 - bufIdx;
+                // Publish written slot
+                slotStates.set(writeSlot, SLOT_READY);
+                
+                // Find next free or older ready slot
+                int nextSlot = -1;
+                for (int i = 0; i < 3; i++) {
+                    if (slotStates.compareAndSet(i, SLOT_FREE, SLOT_WRITING)) {
+                        nextSlot = i;
+                        break;
+                    }
+                }
+                if (nextSlot == -1) {
+                    for (int i = 0; i < 3; i++) {
+                        if (i != writeSlot && slotStates.compareAndSet(i, SLOT_READY, SLOT_WRITING)) {
+                            nextSlot = i;
+                            break;
+                        }
+                    }
+                }
+                if (nextSlot != -1) {
+                    writeSlot = nextSlot;
+                } else {
+                    while (running) {
+                        for (int i = 0; i < 3; i++) {
+                            if (slotStates.compareAndSet(i, SLOT_FREE, SLOT_WRITING)) {
+                                writeSlot = i;
+                                break;
+                            }
+                        }
+                        if (slotStates.get(writeSlot) == SLOT_WRITING) break;
+                        java.util.concurrent.locks.LockSupport.parkNanos(100_000L);
+                    }
+                }
                 
                 // Calculate stats every second
                 frameCount++;
@@ -209,9 +245,18 @@ public class StreamingViewer extends JFrame {
         protected void paintComponent(Graphics g) {
             super.paintComponent(g);
             
-            int[] latest = pendingFrame.getAndSet(null);
-            if (latest != null) {
-                System.arraycopy(latest, 0, displayPixels, 0, Math.min(latest.length, displayPixels.length));
+            if (viewerBuffers != null) {
+                int readySlot = -1;
+                for (int i = 0; i < 3; i++) {
+                    if (slotStates.compareAndSet(i, SLOT_READY, SLOT_READING)) {
+                        readySlot = i;
+                        break;
+                    }
+                }
+                if (readySlot != -1) {
+                    System.arraycopy(viewerBuffers[readySlot], 0, displayPixels, 0, displayPixels.length);
+                    slotStates.set(readySlot, SLOT_FREE);
+                }
             }
 
             // Scale to fit panel while maintaining aspect ratio

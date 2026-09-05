@@ -212,9 +212,21 @@ public class Demo extends Canvas {
                             }
                         }
                     }
-                    // Fallback to current slot if consumer is actively holding the others
-                    writeSlot = (nextSlot != -1) ? nextSlot : writeSlot;
-                    slotStates.set(writeSlot, SLOT_WRITING);
+                    if (nextSlot != -1) {
+                        writeSlot = nextSlot;
+                    } else {
+                        // Reader is actively consuming; wait for next free slot via CAS
+                        while (running) {
+                            for (int i = 0; i < 3; i++) {
+                                if (slotStates.compareAndSet(i, SLOT_FREE, SLOT_WRITING)) {
+                                    writeSlot = i;
+                                    break;
+                                }
+                            }
+                            if (slotStates.get(writeSlot) == SLOT_WRITING) break;
+                            java.util.concurrent.locks.LockSupport.parkNanos(100_000L);
+                        }
+                    }
                 } else {
                     // Adaptively park 500µs to prevent 100% CPU core spinning when no frame changed
                     java.util.concurrent.locks.LockSupport.parkNanos(500_000L);

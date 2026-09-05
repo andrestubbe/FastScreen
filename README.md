@@ -260,7 +260,7 @@ dependencies {
 
 Download the latest pre-compiled JARs directly to add them to your project's classpath:
 
-1. 📦 [**FastScreen-0.1.2.jar**](https://github.com/andrestubbe/FastScreen/releases/tag/0.1.2) (The Core Library)
+1. 📦 [**FastScreen-0.1.3.jar**](https://github.com/andrestubbe/FastScreen/releases/tag/0.1.3) (The Core Library)
 2. ⚡ [**FastImage-0.1.2.jar**](https://github.com/andrestubbe/FastImage/releases/tag/0.1.2) (The SIMD Image Engine)
 3. ⚙️ [**FastCore-0.1.0.jar**](https://github.com/andrestubbe/FastCore/releases/tag/0.1.0) (The Mandatory JNI Loader)
 
