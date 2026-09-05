@@ -149,12 +149,8 @@ For over two decades, Java developers needing screen capture have been constrain
 
 ## Performance Benchmarks
 
-Measured on an Intel Core i7 with Windows 11 (Desktop resolution: 1440×960). Test suite executed via `examples/03-benchmark`:
-
-```bash
-cd examples/03-benchmark
-mvn clean compile exec:java
-```
+> [!NOTE]
+> **Environment & Setup**: Measured on an Intel Core i7 with Windows 11 (Desktop resolution: 1440×960). Test suite executed via `examples/03-benchmark` and official JMH suite.
 
 ### Real Test Execution Results
 
