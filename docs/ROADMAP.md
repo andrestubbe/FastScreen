@@ -12,13 +12,20 @@
 
 ---
 
-## 🟢 v0.1.1: Window Exclusion & Resilient Fallback (Current)
+## 🟢 v0.1.1: Window Exclusion & Resilient Fallback (Completed)
 - [x] **Window Capture Exclusion**: Win32 `SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE)` (0x11).
 - [x] **Title-Based Exclusion**: Automatic top-level window search and affinity tagging.
 - [x] **GDI DIBSection Fallback**: Resilient fallback path for headless sessions, RDP, and VMs.
 - [x] **Dynamic Monitor Bounds**: Automatic resolution adaptation and safe dimension clamping.
 - [x] **Visual Studio 2026/2022 Auto-Detection**: Universal build automation via `vswhere.exe`.
 - [x] **Real-World Benchmark Verification**: 229.8 FPS measured streaming throughput.
+
+---
+
+## 🟢 v0.1.2: FastImage Ecosystem Interop & Live Anti-Aliasing (Current)
+- [x] **Zero-Copy FastImage Streaming**: `getNextFrameImage()` wrapping DXGI staging memory directly.
+- [x] **Direct Region Capture to FastImage**: `captureImage(Rectangle)` bypassing BufferedImage overhead.
+- [x] **Interactive Live Anti-Aliasing**: Dynamic runtime hotkey `[A]` switching between nearest-neighbor and linear texture sampling with live telemetry.
 
 ---
 

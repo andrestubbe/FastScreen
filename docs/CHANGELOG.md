@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.2] - 2026-09-04
+
+### Added
+- **FastImage Ecosystem Integration**:
+  - Added zero-copy `FastImage` bridge methods:
+    - `FastScreen.getNextFrameImage()`: Zero-copy wrapping of the active streaming buffer directly into a `FastImage`.
+    - `FastScreen.captureImage(Rectangle rect)`: Direct native screenshot capture returning an off-heap `FastImage`.
+  - Enables instant chaining with SIMD resize, Dual-Kawase blur, and color conversions.
+- **Interactive Anti-Aliasing in Demo**:
+  - Added runtime hotkey `[A]` in `examples/Demo` to toggle between Point (nearest neighbor) and Linear (bilinear anti-aliasing) GPU texture sampling on the fly.
+  - Live window title telemetry shows current scaling mode and hardware FPS.
+
+---
+
 ## [0.1.1] - 2026-09-04
 
 ### Added

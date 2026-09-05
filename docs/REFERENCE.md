@@ -67,6 +67,9 @@ Captures a sub-rectangle `(x, y, w, h)`. Clamped automatically to monitor bounda
 #### `int[] captureRaw(int x, int y, int w, int h)`
 Captures raw 32-bit packed RGBA pixels `(A << 24 | R << 16 | G << 8 | B)`. Zero allocation on pooled reuse.
 
+#### `FastImage captureImage(Rectangle rect)`
+**FastImage Bridge:** Captures a sub-rectangle directly into an off-heap `FastImage` instance for SIMD processing.
+
 ### High-FPS Streaming Methods
 
 #### `boolean startStream(int x, int y, int width, int height)`
@@ -83,6 +86,9 @@ Returns the latest frame pixel array. If `hasNewFrame()` buffered a frame, retur
 
 #### `ByteBuffer getNextFrameDirect()`
 **Zero-Copy:** Returns a direct `ByteBuffer` pointing directly to native staging memory.
+
+#### `FastImage getNextFrameImage()`
+**Zero-Copy FastImage Bridge:** Wraps the current native staging frame memory directly into an off-heap `FastImage` instance without copying memory.
 
 #### `void stopStream()`
 Stops continuous capture and releases stream-specific textures and staging buffers.
