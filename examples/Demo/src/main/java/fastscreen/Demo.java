@@ -5,6 +5,8 @@ import fasttheme.FastTheme;
 import fastproportion.Proportion;
 import fastproportion.ProportionMode;
 
+import fastimage.FastImage;
+
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
@@ -55,11 +57,18 @@ public class Demo extends Canvas {
     // Interactive State
     private volatile boolean isExcluded = true;
     private volatile boolean isPaused = false;
-    private volatile boolean isAntiAliasing = true;
     private volatile boolean running = true;
 
+    // AA Mode Cycle: 0 = RAW (Point / Max FPS), 1 = BILINEAR AA, 2 = BICUBIC AA (Catmull-Rom)
+    private static final String[] AA_MODES = {"RAW [A]", "BILINEAR AA [A]", "BICUBIC AA [A]"};
+    private volatile int aaModeIndex = 0; // Default RAW for blazing 800+ FPS
+
+    // Optional FPS Limiter: 0 = Uncapped (Max FPS), 144, 60, 30
+    private static final int[] FPS_LIMITS = {0, 144, 60, 30};
+    private volatile int fpsLimitIndex = 0; // default uncapped
+
     // Telemetry
-    private volatile double currentFps = 0.0;
+    private volatile double renderFps = 0.0;
     private volatile double avgCaptureTimeMs = 0.8;
 
     public Demo(JFrame parentFrame) {
@@ -97,9 +106,10 @@ public class Demo extends Canvas {
                 switch (e.getKeyCode()) {
                     case KeyEvent.VK_E -> toggleExclusion();
                     case KeyEvent.VK_A -> {
-                        isAntiAliasing = !isAntiAliasing;
+                        aaModeIndex = (aaModeIndex + 1) % AA_MODES.length;
                         updateTitleBar();
                     }
+                    case KeyEvent.VK_L -> cycleFpsLimit();
                     case KeyEvent.VK_SPACE -> {
                         isPaused = !isPaused;
                         updateTitleBar();
@@ -122,22 +132,30 @@ public class Demo extends Canvas {
         updateTitleBar();
     }
 
+    private void cycleFpsLimit() {
+        fpsLimitIndex = (fpsLimitIndex + 1) % FPS_LIMITS.length;
+        updateTitleBar();
+    }
+
     private void updateTitleBar() {
         SwingUtilities.invokeLater(() -> {
             int curW = getWidth();
             int curH = getHeight();
-            String aaStr = isAntiAliasing ? "Bilinear AA [A]" : "Point [A]";
+            int limit = FPS_LIMITS[fpsLimitIndex];
+            String limitStr = (limit == 0) ? "UNCAPPED [L]" : limit + " FPS [L]";
+            double captureFps = screen != null ? screen.getStreamFPS() : 0.0;
+            String exclStr = isExcluded ? "LENS: HIDDEN [E]" : "LENS: MIRROR [E]";
+            String aaStr = AA_MODES[aaModeIndex];
+
             if (isPaused) {
                 parentFrame.setTitle(String.format(
-                    "FastScreen 0.1.3 — PAUSED | %dx%d | AA: %s | Excl: %s [E] | [SPACE] Resume | [ESC] Exit",
-                    curW, curH, aaStr,
-                    isExcluded ? "ON" : "OFF"
+                    "FastScreen 0.1.3 — PAUSED | %dx%d | %s | %s | %s | [SPACE] Resume | [ESC] Exit",
+                    curW, curH, aaStr, limitStr, exclStr
                 ));
             } else {
                 parentFrame.setTitle(String.format(
-                    "FastScreen 0.1.3 — %.1f FPS | %.2f ms | %dx%d (COVER) | AA: %s | Excl: %s [E] | [SPACE] Pause",
-                    currentFps, avgCaptureTimeMs, curW, curH, aaStr,
-                    isExcluded ? "ON" : "OFF"
+                    "FastScreen 0.1.3 — Render: %.0f FPS | DXGI: %.0f FPS (%.2f ms) | %dx%d | %s | %s | %s | [SPACE] Pause",
+                    renderFps, captureFps, avgCaptureTimeMs, curW, curH, aaStr, limitStr, exclStr
                 ));
             }
         });
@@ -281,17 +299,30 @@ public class Demo extends Canvas {
                         int drawH = Math.round(renderBounds[3]);
 
                         Graphics g = bs.getDrawGraphics();
-                        if (g instanceof Graphics2D g2) {
-                            if (isAntiAliasing) {
+                        if (aaModeIndex == 1) {
+                            // BILINEAR AA
+                            if (g instanceof Graphics2D g2) {
                                 g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
-                                g2.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
-                            } else {
+                            }
+                            g.drawImage(displayImage, drawX, drawY, drawW, drawH, null);
+                        } else if (aaModeIndex == 2 && drawW > 0 && drawH > 0) {
+                            // BICUBIC AA via FastImage SIMD Spline Engine
+                            try {
+                                FastImage fi = FastImage.fromBufferedImage(displayImage);
+                                fi.resizeBicubic(drawW, drawH);
+                                BufferedImage bicubicImg = fi.toBufferedImage();
+                                fi.dispose();
+                                g.drawImage(bicubicImg, drawX, drawY, drawW, drawH, null);
+                            } catch (Throwable t) {
+                                g.drawImage(displayImage, drawX, drawY, drawW, drawH, null);
+                            }
+                        } else {
+                            // RAW POINT: Maximum unthrottled throughput
+                            if (g instanceof Graphics2D g2) {
                                 g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR);
                             }
+                            g.drawImage(displayImage, drawX, drawY, drawW, drawH, null);
                         }
-
-                        // Render edge-to-edge desktop image with zero margin
-                        g.drawImage(displayImage, drawX, drawY, drawW, drawH, null);
 
                         g.dispose();
                         if (!bs.contentsLost()) {
@@ -303,14 +334,25 @@ public class Demo extends Canvas {
                 frameCount++;
                 long now = System.nanoTime();
                 if (now - lastFpsTime >= 500_000_000L) {
-                    currentFps = (frameCount * 1_000_000_000.0) / (now - lastFpsTime);
+                    renderFps = (frameCount * 1_000_000_000.0) / (now - lastFpsTime);
                     frameCount = 0;
                     lastFpsTime = now;
                     updateTitleBar();
                 }
 
-                // Smooth frame pacing (~250 FPS ceiling, prevent runaway busy-loops)
-                java.util.concurrent.locks.LockSupport.parkNanos(4_000_000L);
+                // FPS Pacing: If capped via [L], sleep target duration; otherwise Thread.yield() for maximum unthrottled throughput
+                int limit = FPS_LIMITS[fpsLimitIndex];
+                if (limit > 0) {
+                    long targetFrameNanos = 1_000_000_000L / limit;
+                    long elapsedNanos = System.nanoTime() - now;
+                    long sleepNanos = targetFrameNanos - elapsedNanos;
+                    if (sleepNanos > 0) {
+                        java.util.concurrent.locks.LockSupport.parkNanos(sleepNanos);
+                    }
+                } else {
+                    // Maximum unthrottled throughput
+                    Thread.yield();
+                }
             }
         }, "FastScreen-Render-Loop");
         renderThread.setDaemon(true);
@@ -321,12 +363,9 @@ public class Demo extends Canvas {
         BufferedImage icon = new BufferedImage(64, 64, BufferedImage.TYPE_INT_ARGB);
         Graphics2D g = icon.createGraphics();
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-        g.setColor(new Color(0, 255, 200));
-        g.fillOval(4, 4, 56, 56);
+        // Clean, borderless filled circle in title bar gray (16, 20, 24)
         g.setColor(new Color(16, 20, 24));
-        g.fillOval(14, 14, 36, 36);
-        g.setColor(new Color(0, 230, 118));
-        g.fillOval(24, 24, 16, 16);
+        g.fillOval(6, 6, 52, 52);
         g.dispose();
         return icon;
     }
