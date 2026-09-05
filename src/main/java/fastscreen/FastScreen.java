@@ -5,6 +5,12 @@ import fastimage.FastImage;
 
 import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
+import java.awt.image.ColorModel;
+import java.awt.image.DataBuffer;
+import java.awt.image.DataBufferInt;
+import java.awt.image.Raster;
+import java.awt.image.SinglePixelPackedSampleModel;
+import java.awt.image.WritableRaster;
 import java.nio.ByteBuffer;
 
 /**
@@ -319,12 +325,12 @@ public class FastScreen implements AutoCloseable {
     }
 
     private static BufferedImage wrapPixelsToBufferedImage(int[] pixels, int w, int h) {
-        java.awt.image.DataBufferInt buffer = new java.awt.image.DataBufferInt(pixels, pixels.length);
+        DataBufferInt buffer = new DataBufferInt(pixels, pixels.length);
         int[] masks = {0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000};
-        java.awt.image.SinglePixelPackedSampleModel sm =
-                new java.awt.image.SinglePixelPackedSampleModel(java.awt.image.DataBuffer.TYPE_INT, w, h, masks);
-        java.awt.image.WritableRaster raster = java.awt.image.Raster.createWritableRaster(sm, buffer, null);
-        java.awt.image.ColorModel cm = java.awt.image.ColorModel.getRGBdefault();
+        SinglePixelPackedSampleModel sm =
+                new SinglePixelPackedSampleModel(DataBuffer.TYPE_INT, w, h, masks);
+        WritableRaster raster = Raster.createWritableRaster(sm, buffer, null);
+        ColorModel cm = ColorModel.getRGBdefault();
         return new BufferedImage(cm, raster, false, null);
     }
 
