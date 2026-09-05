@@ -223,7 +223,7 @@ FastScreen is distributed via JitPack. It requires **FastCore** as the unified n
     <dependency>
         <groupId>com.github.andrestubbe</groupId>
         <artifactId>FastScreen</artifactId>
-        <version>0.1.2</version>
+        <version>0.1.3</version>
     </dependency>
 
     <!-- FastImage Native Bridge & Processing -->
@@ -250,7 +250,7 @@ repositories {
 }
 
 dependencies {
-    implementation 'com.github.andrestubbe:FastScreen:0.1.2'
+    implementation 'com.github.andrestubbe:FastScreen:0.1.3'
     implementation 'com.github.andrestubbe:FastImage:0.1.2'
     implementation 'com.github.andrestubbe:FastCore:0.1.0'
 }

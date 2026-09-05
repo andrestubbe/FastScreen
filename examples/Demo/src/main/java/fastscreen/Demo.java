@@ -14,7 +14,7 @@ import java.awt.image.DataBufferInt;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * FastScreen 0.1.2 — High-FPS Scalable Desktop Duplication Demo.
+ * FastScreen 0.1.3 — High-FPS Scalable Desktop Duplication Demo.
  *
  * Features:
  * - High-FPS DirectX 11 DXGI Desktop Duplication & GDI Fallback
@@ -36,11 +36,13 @@ public class Demo extends Canvas {
     private final int screenW;
     private final int screenH;
 
-    // Triple-Buffered Desktop Frames for Zero-Lock Decoupled Rendering
+    // Decoupled Lock-Free Triple Buffer Pool (Slot States: 0=FREE, 1=WRITING, 2=READY, 3=READING)
+    private static final int SLOT_FREE = 0;
+    private static final int SLOT_WRITING = 1;
+    private static final int SLOT_READY = 2;
+    private static final int SLOT_READING = 3;
     private final int[][] displayBuffers;
-    private volatile int latestReadyIndex = 0;
-    private volatile int currentRenderIndex = -1;
-    private final AtomicBoolean newFrameAvailable = new AtomicBoolean(false);
+    private final java.util.concurrent.atomic.AtomicIntegerArray slotStates = new java.util.concurrent.atomic.AtomicIntegerArray(3);
 
     // FastProportion Zero-Allocation Math Context
     private final Proportion proportion;
@@ -172,7 +174,8 @@ public class Demo extends Canvas {
         // WORKER THREAD: Dedicated Zero-GC Capture Pipeline
         // -------------------------------------------------------------
         Thread captureThread = new Thread(() -> {
-            int currentWriteIdx = 1;
+            int writeSlot = 0;
+            slotStates.set(writeSlot, SLOT_WRITING);
 
             while (running) {
                 if (isPaused) {
@@ -182,25 +185,36 @@ public class Demo extends Canvas {
 
                 long t0 = System.nanoTime();
                 // Zero-GC: Capture directly into pre-allocated write buffer
-                boolean gotFrame = screen.getNextFrame(displayBuffers[currentWriteIdx]);
+                boolean gotFrame = screen.getNextFrame(displayBuffers[writeSlot]);
                 long t1 = System.nanoTime();
 
                 if (gotFrame) {
                     double captureMs = (t1 - t0) / 1_000_000.0;
                     avgCaptureTimeMs = avgCaptureTimeMs * 0.9 + captureMs * 0.1;
 
-                    // Publish the written buffer atomically
-                    int justWritten = currentWriteIdx;
-                    latestReadyIndex = justWritten;
-                    newFrameAvailable.set(true);
+                    // Publish the written slot: state becomes READY
+                    slotStates.set(writeSlot, SLOT_READY);
 
-                    // Pick next buffer that is neither latestReady nor currentlyBeingRendered
+                    // Find next free or stale ready slot for writing
+                    int nextSlot = -1;
                     for (int i = 0; i < 3; i++) {
-                        if (i != justWritten && i != currentRenderIndex) {
-                            currentWriteIdx = i;
+                        if (slotStates.compareAndSet(i, SLOT_FREE, SLOT_WRITING)) {
+                            nextSlot = i;
                             break;
                         }
                     }
+                    // If all other slots are busy (e.g. 1 READING, 1 READY), overwrite older READY
+                    if (nextSlot == -1) {
+                        for (int i = 0; i < 3; i++) {
+                            if (i != writeSlot && slotStates.compareAndSet(i, SLOT_READY, SLOT_WRITING)) {
+                                nextSlot = i;
+                                break;
+                            }
+                        }
+                    }
+                    // Fallback to current slot if consumer is actively holding the others
+                    writeSlot = (nextSlot != -1) ? nextSlot : writeSlot;
+                    slotStates.set(writeSlot, SLOT_WRITING);
                 } else {
                     // Adaptively park 500µs to prevent 100% CPU core spinning when no frame changed
                     java.util.concurrent.locks.LockSupport.parkNanos(500_000L);
@@ -218,13 +232,19 @@ public class Demo extends Canvas {
             int frameCount = 0;
 
             while (running) {
-                // If a fresh capture frame is ready, lock and copy to displayPixels
-                if (newFrameAvailable.compareAndSet(true, false)) {
-                    int readyIdx = latestReadyIndex;
-                    if (readyIdx >= 0) {
-                        currentRenderIndex = readyIdx;
-                        System.arraycopy(displayBuffers[readyIdx], 0, displayPixels, 0, displayPixels.length);
+                // Find latest READY slot and claim it with CAS (READY -> READING)
+                int readySlot = -1;
+                for (int i = 0; i < 3; i++) {
+                    if (slotStates.compareAndSet(i, SLOT_READY, SLOT_READING)) {
+                        readySlot = i;
+                        break;
                     }
+                }
+
+                if (readySlot != -1) {
+                    System.arraycopy(displayBuffers[readySlot], 0, displayPixels, 0, displayPixels.length);
+                    // Finished reading: mark slot as FREE for writer
+                    slotStates.set(readySlot, SLOT_FREE);
                 }
 
                 BufferStrategy bs = getBufferStrategy();

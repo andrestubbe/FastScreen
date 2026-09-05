@@ -115,26 +115,30 @@ public class StreamingViewer extends JFrame {
         System.out.println("Stream started");
     }
     
+    private final java.util.concurrent.atomic.AtomicReference<int[]> pendingFrame = new java.util.concurrent.atomic.AtomicReference<>();
+    
     private void captureLoop() {
         long totalCaptureTime = 0;
         int captureCount = 0;
         
-        // Pre-allocate reusable array for zero-copy transfer
-        int[] pixels = new int[frameWidth * frameHeight];
+        // Double-buffer pool for decoupling worker and UI
+        int[][] buffers = new int[2][frameWidth * frameHeight];
+        int bufIdx = 0;
         
         while (running) {
             long startTime = System.nanoTime();
             
-            // ZERO-COPY: Get frame as DirectByteBuffer (no array allocation!)
-            ByteBuffer directBuffer = screen.getNextFrameDirect();
+            // Capture directly into reusable array
+            boolean gotFrame = screen.getNextFrame(buffers[bufIdx]);
             
-            if (directBuffer != null) {
+            if (gotFrame) {
                 long captureTime = System.nanoTime() - startTime;
                 totalCaptureTime += captureTime;
                 captureCount++;
                 
-                // Convert DirectByteBuffer to int[] for display
-                directBuffer.asIntBuffer().get(pixels);
+                // Publish current buffer to UI and flip to next
+                pendingFrame.set(buffers[bufIdx]);
+                bufIdx = 1 - bufIdx;
                 
                 // Calculate stats every second
                 frameCount++;
@@ -152,19 +156,17 @@ public class StreamingViewer extends JFrame {
                     SwingUtilities.invokeLater(this::updateStats);
                 }
                 
-                // Update display on EDT - use direct reference, NO clone!
-                SwingUtilities.invokeLater(() -> capturePanel.updateFrame(pixels));
+                // Request repaint without flooding EDT queue
+                capturePanel.repaint();
+            } else {
+                java.util.concurrent.locks.LockSupport.parkNanos(500_000L);
             }
-            
-            // NO FRAME LIMITING - capture as fast as possible!
-            // Small yield to prevent 100% CPU spin
-            Thread.yield();
         }
     }
     
     private void updateStats() {
-        statsLabel.setText(String.format("FPS: %.1f | Avg: %.2fms | Resolution: 640x480", 
-            currentFps, avgCaptureTime));
+        statsLabel.setText(String.format("FPS: %.1f | Avg: %.2fms | Resolution: %dx%d",
+            currentFps, avgCaptureTime, frameWidth, frameHeight));
     }
     
     private void stopStream() {
@@ -185,7 +187,6 @@ public class StreamingViewer extends JFrame {
     }
     
     private void exit() {
-        running = false;
         stopStream();
         screen.dispose();
         dispose();
@@ -194,46 +195,40 @@ public class StreamingViewer extends JFrame {
     
     // Custom panel for displaying captured frames
     private class CapturePanel extends JPanel {
-        private BufferedImage currentFrame;
-        private int frameWidth = 640;   // Scaled output resolution (hardware)
-        private int frameHeight = 480;
-        
-        public void updateFrame(int[] pixels) {
-            // Create BufferedImage from pixel array
-            if (currentFrame == null || currentFrame.getWidth() != frameWidth || currentFrame.getHeight() != frameHeight) {
-                currentFrame = new BufferedImage(frameWidth, frameHeight, BufferedImage.TYPE_INT_ARGB);
-            }
-            
-            currentFrame.setRGB(0, 0, frameWidth, frameHeight, pixels, 0, frameWidth);
-            repaint();
+        private final BufferedImage displayImage;
+        private final int[] displayPixels;
+        private final int panelFrameWidth = 640;
+        private final int panelFrameHeight = 480;
+
+        public CapturePanel() {
+            displayImage = new BufferedImage(panelFrameWidth, panelFrameHeight, BufferedImage.TYPE_INT_ARGB);
+            displayPixels = ((java.awt.image.DataBufferInt) displayImage.getRaster().getDataBuffer()).getData();
         }
         
         @Override
         protected void paintComponent(Graphics g) {
             super.paintComponent(g);
             
-            if (currentFrame != null) {
-                // Scale to fit panel while maintaining aspect ratio
-                int panelWidth = getWidth();
-                int panelHeight = getHeight();
-                
-                double scaleX = (double) panelWidth / frameWidth;
-                double scaleY = (double) panelHeight / frameHeight;
-                double scale = Math.min(scaleX, scaleY);
-                
-                int newWidth = (int) (frameWidth * scale);
-                int newHeight = (int) (frameHeight * scale);
-                
-                int x = (panelWidth - newWidth) / 2;
-                int y = (panelHeight - newHeight) / 2;
-                
-                g.drawImage(currentFrame, x, y, newWidth, newHeight, null);
-            } else {
-                g.setColor(Color.BLACK);
-                g.fillRect(0, 0, getWidth(), getHeight());
-                g.setColor(Color.WHITE);
-                g.drawString("No frame - Press START", 10, 20);
+            int[] latest = pendingFrame.getAndSet(null);
+            if (latest != null) {
+                System.arraycopy(latest, 0, displayPixels, 0, Math.min(latest.length, displayPixels.length));
             }
+
+            // Scale to fit panel while maintaining aspect ratio
+            int panelWidth = getWidth();
+            int panelHeight = getHeight();
+            
+            double scaleX = (double) panelWidth / panelFrameWidth;
+            double scaleY = (double) panelHeight / panelFrameHeight;
+            double scale = Math.min(scaleX, scaleY);
+            
+            int newWidth = (int) (panelFrameWidth * scale);
+            int newHeight = (int) (panelFrameHeight * scale);
+            
+            int x = (panelWidth - newWidth) / 2;
+            int y = (panelHeight - newHeight) / 2;
+            
+            g.drawImage(displayImage, x, y, newWidth, newHeight, null);
         }
     }
     

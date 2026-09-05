@@ -127,16 +127,6 @@ public class FastScreen implements AutoCloseable {
         return wrapPixelsToBufferedImage(pixels, w, h);
     }
 
-    private static BufferedImage wrapPixelsToBufferedImage(int[] pixels, int w, int h) {
-        java.awt.image.DataBufferInt buffer = new java.awt.image.DataBufferInt(pixels, pixels.length);
-        int[] masks = {0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000};
-        java.awt.image.SinglePixelPackedSampleModel sm = 
-            new java.awt.image.SinglePixelPackedSampleModel(java.awt.image.DataBuffer.TYPE_INT, w, h, masks);
-        java.awt.image.WritableRaster raster = java.awt.image.Raster.createWritableRaster(sm, buffer, null);
-        java.awt.image.ColorModel cm = java.awt.image.ColorModel.getRGBdefault();
-        return new BufferedImage(cm, raster, false, null);
-    }
-
     /**
      * Captures raw RGBA pixel array.
      *
@@ -245,26 +235,6 @@ public class FastScreen implements AutoCloseable {
     }
 
     /**
-     * Records a received frame timestamp for real-time FPS throughput calculation.
-     */
-    private synchronized void recordFrameReceived() {
-        long now = System.nanoTime();
-        if (fpsStartTimeNanos == 0) {
-            fpsStartTimeNanos = now;
-            fpsFrameCount = 1;
-            return;
-        }
-
-        fpsFrameCount++;
-        long elapsedNanos = now - fpsStartTimeNanos;
-        if (elapsedNanos >= 250_000_000L) { // Update FPS every 250 ms
-            currentStreamingFps = (fpsFrameCount * 1_000_000_000.0) / elapsedNanos;
-            fpsStartTimeNanos = now;
-            fpsFrameCount = 0;
-        }
-    }
-
-    /**
      * Enables hardware-accelerated scaling for streaming.
      * This dramatically reduces CPU load by scaling on the GPU.
      * Must be called AFTER startStream().
@@ -298,16 +268,6 @@ public class FastScreen implements AutoCloseable {
     }
 
     /**
-     * Re-includes a window in screen capture by its HWND handle.
-     *
-     * @param hwnd Win32 HWND window handle
-     * @return true if successfully applied
-     */
-    public static boolean includeWindow(long hwnd) {
-        return setWindowExcluded(hwnd, false);
-    }
-
-    /**
      * Excludes a window from screen capture by matching its window title.
      *
      * @param windowTitle Title or substring of the window to exclude
@@ -315,6 +275,16 @@ public class FastScreen implements AutoCloseable {
      */
     public static boolean excludeWindow(String windowTitle) {
         return nativeSetWindowExcludedByTitle(windowTitle, true);
+    }
+
+    /**
+     * Re-includes a window in screen capture by its HWND handle.
+     *
+     * @param hwnd Win32 HWND window handle
+     * @return true if successfully applied
+     */
+    public static boolean includeWindow(long hwnd) {
+        return setWindowExcluded(hwnd, false);
     }
 
     /**
@@ -345,6 +315,36 @@ public class FastScreen implements AutoCloseable {
         if (nativeHandle != 0) {
             nativeDispose(nativeHandle);
             nativeHandle = 0;
+        }
+    }
+
+    private static BufferedImage wrapPixelsToBufferedImage(int[] pixels, int w, int h) {
+        java.awt.image.DataBufferInt buffer = new java.awt.image.DataBufferInt(pixels, pixels.length);
+        int[] masks = {0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000};
+        java.awt.image.SinglePixelPackedSampleModel sm =
+                new java.awt.image.SinglePixelPackedSampleModel(java.awt.image.DataBuffer.TYPE_INT, w, h, masks);
+        java.awt.image.WritableRaster raster = java.awt.image.Raster.createWritableRaster(sm, buffer, null);
+        java.awt.image.ColorModel cm = java.awt.image.ColorModel.getRGBdefault();
+        return new BufferedImage(cm, raster, false, null);
+    }
+
+    /**
+     * Records a received frame timestamp for real-time FPS throughput calculation.
+     */
+    private synchronized void recordFrameReceived() {
+        long now = System.nanoTime();
+        if (fpsStartTimeNanos == 0) {
+            fpsStartTimeNanos = now;
+            fpsFrameCount = 1;
+            return;
+        }
+
+        fpsFrameCount++;
+        long elapsedNanos = now - fpsStartTimeNanos;
+        if (elapsedNanos >= 250_000_000L) { // Update FPS every 250 ms
+            currentStreamingFps = (fpsFrameCount * 1_000_000_000.0) / elapsedNanos;
+            fpsStartTimeNanos = now;
+            fpsFrameCount = 0;
         }
     }
 

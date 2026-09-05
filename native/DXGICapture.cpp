@@ -287,6 +287,34 @@ public:
             if (!allocateBufferPool(w * h)) return false;
         }
 
+        // If scaling is active, re-create the vertex buffer with updated subregion UV coordinates
+        if (useScaling && device) {
+            float u0 = (width > 0) ? (float)captureX / (float)width : 0.0f;
+            float v0 = (height > 0) ? (float)captureY / (float)height : 0.0f;
+            float u1 = (width > 0) ? (float)(captureX + captureWidth) / (float)width : 1.0f;
+            float v1 = (height > 0) ? (float)(captureY + captureHeight) / (float)height : 1.0f;
+
+            struct Vertex { float x, y, u, v; };
+            Vertex vertices[] = {
+                { -1.0f,  1.0f, u0, v0 },  // Top-left
+                {  1.0f,  1.0f, u1, v0 },  // Top-right
+                { -1.0f, -1.0f, u0, v1 },  // Bottom-left
+                {  1.0f, -1.0f, u1, v1 }   // Bottom-right
+            };
+
+            if (vertexBuffer) {
+                vertexBuffer->Release();
+                vertexBuffer = nullptr;
+            }
+
+            D3D11_BUFFER_DESC vbDesc = {};
+            vbDesc.Usage = D3D11_USAGE_IMMUTABLE;
+            vbDesc.ByteWidth = sizeof(vertices);
+            vbDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+            D3D11_SUBRESOURCE_DATA vbData = { vertices, 0, 0 };
+            device->CreateBuffer(&vbDesc, &vbData, &vertexBuffer);
+        }
+
         return true;
     }
 
