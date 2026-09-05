@@ -149,9 +149,6 @@ For over two decades, Java developers needing screen capture have been constrain
 
 ## Performance Benchmarks
 
-> [!NOTE]
-> **Environment & Setup**: Measured on an Intel Core i7 with Windows 11 (Desktop resolution: 1440×960). Test suite executed via `examples/03-benchmark` and official JMH suite.
-
 ### Real Test Execution Results
 
 | Benchmark Metric | Java `java.awt.Robot` | FastScreen Native | Improvement |
@@ -163,7 +160,7 @@ For over two decades, Java developers needing screen capture have been constrain
 | **GPU Scaling Overhead** | High CPU consumption | **0% CPU (GPU Shaders)** | **Hardware Offloaded** |
 
 > [!NOTE]
-> When running with full DXGI Desktop Duplication on dedicated GPUs, streaming throughput scales to **500–2000 FPS**.
+> **Environment & Setup**: Measured on an Intel Core i7 with Windows 11 (Desktop resolution: 1440×960). Test suite executed via `examples/03-benchmark` and official JMH suite. When running with full DXGI Desktop Duplication on dedicated GPUs, streaming throughput scales to **500–2000 FPS**.
 
 ---
 
