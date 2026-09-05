@@ -63,7 +63,7 @@ public class Demo {
 - [Why FastScreen?](#why-fastscreen)
 - [Quick Start](#quick-start)
 - [Key Features](#key-features)
-- [Real-Life Examples & Use Cases](#real-life-examples--use-cases)
+- [Real-World Use Cases](#real-world-use-cases)
 - [Architecture & Hardware Pipeline](#architecture--hardware-pipeline)
 - [Performance Benchmarks](#performance-benchmarks)
 - [API Quick Reference](#api-quick-reference)
@@ -108,22 +108,13 @@ For over two decades, Java developers needing screen capture have been constrain
 
 ---
 
-## Real-Life Examples & Use Cases
+## Real-World Use Cases
 
-### 1. 🔮 Live Desktop Distortion & Magic Lens ([FastVulkan](https://github.com/andrestubbe/FastVulkan))
-By combining `FastScreen.startStream(...)` with `FastScreen.excludeWindow(windowHandle)`, FastVulkan streams the live desktop behind itself at **120 FPS**, deforming the desktop in real time across a 240×135 mesh (64,800 triangles) using organic shaders (ripples, black holes, vortexes) without capturing itself.
-
-### 2. 🎮 Real-Time Computer Vision & Gaming Bots
-Vision-guided automation agents and reinforcement learning models require sub-5ms screen frames. FastScreen feeds raw RGBA frames directly into OpenCV, TensorRT, or ONNX runtimes with zero latency and zero GC spikes.
-
-### 3. 👁️ Ultra-Fast Screen OCR & Live Scraping ([FastOCR](https://github.com/andrestubbe/FastOCR))
-Ingest live text from any on-screen window, trading terminal, or dashboard with instantaneous pixel retrieval (`screen.getPixelColor(x, y)` or sub-region capture).
-
-### 4. 📺 Low-Latency Screen Recording & Streaming
-Broadcast or record high-refresh rate displays (144 Hz, 240 Hz, 360 Hz) without dropping frames or bottlenecking the CPU.
-
-### 5. 🚫 Privacy & Anti-Feedback UI Overlays
-Build screen-sharing utilities, streamers' HUDs, or annotation overlays that are completely invisible to OBS, Discord, Zoom, or FastScreen itself.
+- 🔮 **Live Desktop Distortion & Shaders ([FastVulkan](https://github.com/andrestubbe/FastVulkan))**: Stream live desktop frames at 120+ FPS behind mesh shaders without recursive window feedback.
+- 🎮 **Real-Time Computer Vision & Bots**: Feed raw RGBA frames directly into OpenCV, TensorRT, or ONNX runtimes with sub-5ms latency and zero GC pauses.
+- 👁️ **Ultra-Fast Screen OCR & Scraping ([FastOCR](https://github.com/andrestubbe/FastOCR))**: Instantaneous pixel retrieval and region capture from on-screen dashboards or trading windows.
+- 📺 **High-Refresh Screen Streaming**: Ingest 144 Hz, 240 Hz, or 360 Hz displays with hardware GPU downsampling and zero dropped frames.
+- 🚫 **Privacy & Anti-Feedback UI Overlays**: Build capture-invisible streamers' HUDs, annotation tools, and transparent overlays using native display affinity.
 
 ---
 
