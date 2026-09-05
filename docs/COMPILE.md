@@ -85,11 +85,7 @@ FastScreen/
 │   └── DXGICapture.cpp        # DirectX 11 & GDI fallback engine
 ├── examples/                   # Standalone runnable demos & benchmarks
 │   ├── Demo/                   # Visual Showcase Hero Demo (FastTheme, AA, COVER)
-│   ├── Benchmark/              # JMH Microbenchmark Suite
-│   ├── 00-basic-capture/       # Simple screenshot demo
-│   ├── 01-smoke-test/          # Library loading verification
-│   ├── 02-streaming-viewer/    # Real-time streaming viewer
-│   └── 03-benchmark/           # Quick console benchmark
+│   └── Benchmark/              # JMH Microbenchmark Suite
 ├── docs/                       # Architectural documentation
 ├── compile.bat                 # Automated VS compiler script
 ├── run-demo.bat                # Launch Hero Demo
