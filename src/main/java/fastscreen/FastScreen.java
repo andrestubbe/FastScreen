@@ -11,36 +11,41 @@ import java.nio.ByteBuffer;
  * High-performance Java screen capture using DXGI Desktop Duplication.
  *
  * <p>FastScreen provides zero-copy, hardware-accelerated screen capture
- * at 500-2000 FPS using DirectX DXGI Desktop Duplication API.</p>
+ * at 240-2000 FPS using DirectX 11 DXGI Desktop Duplication API.</p>
  *
  * <p>Key features:
  * <ul>
- *   <li>Single screenshot capture (BufferedImage or raw pixels)</li>
- *   <li>High-FPS streaming mode for real-time applications</li>
- *   <li>Multi-monitor support</li>
- *   <li>Zero GC pressure with native buffers</li>
+ *   <li>Single screenshot capture (BufferedImage, raw pixels, or zero-copy FastImage)</li>
+ *   <li>High-FPS streaming mode for real-time computer vision and rendering</li>
+ *   <li>Zero GC pressure with native DirectByteBuffer buffers and frame pooling</li>
+ *   <li>Hardware GPU scaling (Point and Bilinear AA via embedded HLSL shaders)</li>
+ *   <li>Native Window Capture Exclusion (Win32 display affinity)</li>
+ *   <li>Multi-monitor support and resilient GDI fallback</li>
  * </ul></p>
  *
  * <p><strong>Example usage:</strong></p>
  * <pre>{@code
  * FastScreen screen = new FastScreen();
+ * try {
+ *     // Single capture
+ *     BufferedImage img = screen.captureScreen(new Rectangle(0, 0, 1920, 1080));
  *
- * // Single capture
- * BufferedImage img = screen.captureScreen(new Rectangle(0, 0, 1920, 1080));
- *
- * // High-FPS streaming
- * screen.startStream(0, 0, 1920, 1080);
- * while (running) {
- *     if (screen.hasNewFrame()) {
- *         int[] pixels = screen.getNextFrame();
- *         // Process frame...
+ *     // High-FPS streaming
+ *     screen.startStream(0, 0, 1920, 1080);
+ *     while (running) {
+ *         if (screen.hasNewFrame()) {
+ *             ByteBuffer directBuf = screen.getNextFrameDirect();
+ *             // Process direct native buffer with 0 GC overhead...
+ *         }
  *     }
+ *     screen.stopStream();
+ * } finally {
+ *     screen.dispose();
  * }
- * screen.stopStream();
  * }</pre>
  *
  * @author Andre Stubbe
- * @version 1.0.0
+ * @version 0.1.2
  * @since 2026-04-16
  */
 public class FastScreen {
@@ -49,37 +54,6 @@ public class FastScreen {
         // Load native library via FastCore
         FastCore.loadLibrary("fastscreen");
     }
-
-    // Native methods
-    private native long nativeInit();
-
-    private native long nativeInitRegion(int x, int y, int width, int height);
-
-    private native int[] nativeCaptureScreen(int x, int y, int width, int height);
-
-    private native boolean nativeStartStream(int x, int y, int width, int height);
-
-    private native int[] nativeGetNextFrame();
-
-    private native ByteBuffer nativeGetNextFrameDirect();  // ZERO-COPY!
-
-    private native void nativeStopStream();
-
-    private native boolean nativeSetupHardwareScaling(int outW, int outH, int filter);
-
-    private native int nativeGetPixelColor(int x, int y);
-
-    private native void nativeDispose(long handle);
-
-    private native int nativeGetMonitorCount();
-
-    private native int nativeGetFrameWidth();
-
-    private native int nativeGetFrameHeight();
-
-    private static native boolean nativeSetWindowExcluded(long hwnd, boolean exclude);
-
-    private static native boolean nativeSetWindowExcludedByTitle(String title, boolean exclude);
 
     private long nativeHandle = 0;
     private boolean streaming = false;
@@ -97,6 +71,11 @@ public class FastScreen {
     // Frame polling buffer - stores frame from hasNewFrame() for getNextFrame()
     private int[] bufferedFrame = null;
     private boolean frameBuffered = false;
+
+    // Streaming FPS calculation
+    private long fpsStartTimeNanos = 0;
+    private int fpsFrameCount = 0;
+    private volatile double currentStreamingFps = 0.0;
 
     /**
      * Creates a new FastScreen instance.
@@ -192,14 +171,14 @@ public class FastScreen {
     }
 
     /**
-     * Gets color of a single pixel.
+     * Captures entire monitor.
      *
-     * @param x X coordinate
-     * @param y Y coordinate
-     * @return RGBA color value
+     * @param monitorIndex Monitor index (0-based)
+     * @return BufferedImage of monitor
      */
-    public int getPixelColor(int x, int y) {
-        return nativeGetPixelColor(x, y);
+    public BufferedImage captureMonitor(int monitorIndex) {
+        // TODO: Implement monitor capture
+        throw new UnsupportedOperationException("Not yet implemented");
     }
 
     /**
@@ -217,8 +196,31 @@ public class FastScreen {
             this.streaming = true;
             this.frameWidth = width;
             this.frameHeight = height;
+            synchronized (this) {
+                this.fpsStartTimeNanos = 0;
+                this.fpsFrameCount = 0;
+                this.currentStreamingFps = 0.0;
+            }
         }
         return success;
+    }
+
+    /**
+     * Stops streaming capture.
+     */
+    public void stopStream() {
+        if (streaming) {
+            nativeStopStream();
+            this.streaming = false;
+            // Clear any buffered frame
+            bufferedFrame = null;
+            frameBuffered = false;
+            synchronized (this) {
+                this.fpsStartTimeNanos = 0;
+                this.fpsFrameCount = 0;
+                this.currentStreamingFps = 0.0;
+            }
+        }
     }
 
     /**
@@ -242,30 +244,6 @@ public class FastScreen {
             this.frameHeight = outputHeight;
         }
         return success;
-    }
-
-    /**
-     * Stops streaming capture.
-     */
-    public void stopStream() {
-        if (streaming) {
-            nativeStopStream();
-            this.streaming = false;
-            // Clear any buffered frame
-            bufferedFrame = null;
-            frameBuffered = false;
-        }
-    }
-
-    /**
-     * Captures entire monitor.
-     *
-     * @param monitorIndex Monitor index (0-based)
-     * @return BufferedImage of monitor
-     */
-    public BufferedImage captureMonitor(int monitorIndex) {
-        // TODO: Implement monitor capture
-        throw new UnsupportedOperationException("Not yet implemented");
     }
 
     /**
@@ -344,6 +322,17 @@ public class FastScreen {
     }
 
     /**
+     * Gets color of a single pixel.
+     *
+     * @param x X coordinate
+     * @param y Y coordinate
+     * @return RGBA color value
+     */
+    public int getPixelColor(int x, int y) {
+        return nativeGetPixelColor(x, y);
+    }
+
+    /**
      * Gets the next frame in streaming mode.
      * If hasNewFrame() was called before, returns the buffered frame.
      * Otherwise polls native side directly.
@@ -355,16 +344,21 @@ public class FastScreen {
             return null;
         }
 
+        int[] frame;
         // If we have a buffered frame from hasNewFrame(), return it
         if (frameBuffered && bufferedFrame != null) {
-            int[] frame = bufferedFrame;
+            frame = bufferedFrame;
             bufferedFrame = null;
             frameBuffered = false;
-            return frame;
+        } else {
+            // Otherwise poll native directly
+            frame = nativeGetNextFrame();
         }
 
-        // Otherwise poll native directly
-        return nativeGetNextFrame();
+        if (frame != null) {
+            recordFrameReceived();
+        }
+        return frame;
     }
 
     /**
@@ -380,7 +374,31 @@ public class FastScreen {
         }
 
         // ZERO COPY! Returns native memory wrapped in ByteBuffer
-        return nativeGetNextFrameDirect();
+        ByteBuffer buf = nativeGetNextFrameDirect();
+        if (buf != null) {
+            recordFrameReceived();
+        }
+        return buf;
+    }
+
+    /**
+     * Records a received frame timestamp for real-time FPS throughput calculation.
+     */
+    private synchronized void recordFrameReceived() {
+        long now = System.nanoTime();
+        if (fpsStartTimeNanos == 0) {
+            fpsStartTimeNanos = now;
+            fpsFrameCount = 1;
+            return;
+        }
+
+        fpsFrameCount++;
+        long elapsedNanos = now - fpsStartTimeNanos;
+        if (elapsedNanos >= 250_000_000L) { // Update FPS every 250 ms
+            currentStreamingFps = (fpsFrameCount * 1_000_000_000.0) / elapsedNanos;
+            fpsStartTimeNanos = now;
+            fpsFrameCount = 0;
+        }
     }
 
     /**
@@ -413,13 +431,15 @@ public class FastScreen {
     }
 
     /**
-     * Gets current streaming FPS.
+     * Gets current streaming FPS throughput measured from DXGI frame arrivals.
      *
-     * @return FPS value
+     * @return Measured frames per second, or 0.0 if not streaming
      */
     public double getStreamFPS() {
-        // TODO: Implement FPS calculation
-        return 0.0;
+        if (!streaming) {
+            return 0.0;
+        }
+        return currentStreamingFps;
     }
 
     /**
@@ -451,4 +471,35 @@ public class FastScreen {
             super.finalize();
         }
     }
+
+    // Native methods
+    private native long nativeInit();
+
+    private native long nativeInitRegion(int x, int y, int width, int height);
+
+    private native int[] nativeCaptureScreen(int x, int y, int width, int height);
+
+    private native boolean nativeStartStream(int x, int y, int width, int height);
+
+    private native int[] nativeGetNextFrame();
+
+    private native ByteBuffer nativeGetNextFrameDirect();  // ZERO-COPY!
+
+    private native void nativeStopStream();
+
+    private native boolean nativeSetupHardwareScaling(int outW, int outH, int filter);
+
+    private native int nativeGetPixelColor(int x, int y);
+
+    private native void nativeDispose(long handle);
+
+    private native int nativeGetMonitorCount();
+
+    private native int nativeGetFrameWidth();
+
+    private native int nativeGetFrameHeight();
+
+    private static native boolean nativeSetWindowExcluded(long hwnd, boolean exclude);
+
+    private static native boolean nativeSetWindowExcludedByTitle(String title, boolean exclude);
 }
