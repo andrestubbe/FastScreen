@@ -43,7 +43,7 @@ import java.nio.ByteBuffer;
  * @version 1.0.0
  * @since 2026-04-16
  */
-public class FastScreen {
+public class FastScreen implements AutoCloseable {
 
     static {
         // Load native library via FastCore
@@ -319,6 +319,14 @@ public class FastScreen {
             nativeDispose(nativeHandle);
             nativeHandle = 0;
         }
+    }
+
+    /**
+     * Closes this FastScreen instance, releasing all native GPU resources.
+     */
+    @Override
+    public void close() {
+        dispose();
     }
 
     /**
