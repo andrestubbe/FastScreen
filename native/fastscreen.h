@@ -113,6 +113,25 @@ JNIEXPORT jintArray JNICALL Java_fastscreen_FastScreen_nativeCaptureScreen(JNIEn
 JNIEXPORT jboolean JNICALL Java_fastscreen_FastScreen_nativeStartStream(JNIEnv* env, jobject obj, jlong handle, jint x, jint y, jint width, jint height);
 
 /**
+ * @brief Poll if a new frame is available without allocating an int array
+ * @param env JNI environment pointer
+ * @param obj FastScreen Java object
+ * @param handle Native handle
+ * @return jboolean JNI_TRUE if frame acquired, JNI_FALSE otherwise
+ */
+JNIEXPORT jboolean JNICALL Java_fastscreen_FastScreen_nativePollNewFrame(JNIEnv* env, jobject obj, jlong handle);
+
+/**
+ * @brief Copy next frame into pre-allocated user array (0 GC allocations)
+ * @param env JNI environment pointer
+ * @param obj FastScreen Java object
+ * @param handle Native handle
+ * @param destArray Destination int[] array
+ * @return jboolean JNI_TRUE if copied, JNI_FALSE if no new frame
+ */
+JNIEXPORT jboolean JNICALL Java_fastscreen_FastScreen_nativeGetNextFrameInto(JNIEnv* env, jobject obj, jlong handle, jintArray destArray);
+
+/**
  * @brief Get next frame from streaming capture (int array)
  * @param env JNI environment pointer
  * @param obj FastScreen Java object

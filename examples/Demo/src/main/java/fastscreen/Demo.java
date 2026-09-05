@@ -36,10 +36,10 @@ public class Demo extends Canvas {
     private final int screenW;
     private final int screenH;
 
-    // Double-Buffered Desktop Frames for Zero-Lock Decoupled Rendering
-    private final int[] bufferA;
-    private final int[] bufferB;
-    private volatile int[] activeFrontBuffer;
+    // Triple-Buffered Desktop Frames for Zero-Lock Decoupled Rendering
+    private final int[][] displayBuffers;
+    private volatile int latestReadyIndex = 0;
+    private volatile int currentRenderIndex = -1;
     private final AtomicBoolean newFrameAvailable = new AtomicBoolean(false);
 
     // FastProportion Zero-Allocation Math Context
@@ -77,11 +77,9 @@ public class Demo extends Canvas {
         setMinimumSize(new Dimension(320, 180));
         setIgnoreRepaint(true);
 
-        // 4. Double buffer pool for capture
+        // 4. Triple buffer pool for capture
         int totalPixels = screenW * screenH;
-        this.bufferA = new int[totalPixels];
-        this.bufferB = new int[totalPixels];
-        this.activeFrontBuffer = bufferA;
+        this.displayBuffers = new int[3][totalPixels];
 
         // Display image for canvas blit
         this.displayImage = new BufferedImage(screenW, screenH, BufferedImage.TYPE_INT_RGB);
@@ -171,10 +169,10 @@ public class Demo extends Canvas {
         updateTitleBar();
 
         // -------------------------------------------------------------
-        // WORKER THREAD: Dedicated High-Speed Capture Pipeline
+        // WORKER THREAD: Dedicated Zero-GC Capture Pipeline
         // -------------------------------------------------------------
         Thread captureThread = new Thread(() -> {
-            int[] backBuffer = bufferB;
+            int currentWriteIdx = 1;
 
             while (running) {
                 if (isPaused) {
@@ -183,50 +181,49 @@ public class Demo extends Canvas {
                 }
 
                 long t0 = System.nanoTime();
-                int[] rawFrame = screen.getNextFrame();
+                // Zero-GC: Capture directly into pre-allocated write buffer
+                boolean gotFrame = screen.getNextFrame(displayBuffers[currentWriteIdx]);
                 long t1 = System.nanoTime();
 
-                if (rawFrame != null && rawFrame.length == backBuffer.length) {
-                    System.arraycopy(rawFrame, 0, backBuffer, 0, rawFrame.length);
-                    // Atomic pointer swap to present latest frame without blocking
-                    activeFrontBuffer = backBuffer;
-                    backBuffer = (backBuffer == bufferA) ? bufferB : bufferA;
-                    newFrameAvailable.set(true);
-
+                if (gotFrame) {
                     double captureMs = (t1 - t0) / 1_000_000.0;
                     avgCaptureTimeMs = avgCaptureTimeMs * 0.9 + captureMs * 0.1;
-                } else if (!streamStarted) {
-                    BufferedImage shot = screen.captureScreen();
-                    if (shot != null) {
-                        int[] shotPx = ((DataBufferInt) shot.getRaster().getDataBuffer()).getData();
-                        System.arraycopy(shotPx, 0, backBuffer, 0, Math.min(shotPx.length, backBuffer.length));
-                        activeFrontBuffer = backBuffer;
-                        backBuffer = (backBuffer == bufferA) ? bufferB : bufferA;
-                        newFrameAvailable.set(true);
-                    }
-                }
 
-                // Yield to prevent burning 100% of a CPU core
-                Thread.yield();
+                    // Publish the written buffer atomically
+                    int justWritten = currentWriteIdx;
+                    latestReadyIndex = justWritten;
+                    newFrameAvailable.set(true);
+
+                    // Pick next buffer that is neither latestReady nor currentlyBeingRendered
+                    for (int i = 0; i < 3; i++) {
+                        if (i != justWritten && i != currentRenderIndex) {
+                            currentWriteIdx = i;
+                            break;
+                        }
+                    }
+                } else {
+                    // Adaptively park 500µs to prevent 100% CPU core spinning when no frame changed
+                    java.util.concurrent.locks.LockSupport.parkNanos(500_000L);
+                }
             }
         }, "FastScreen-Capture-Worker");
         captureThread.setDaemon(true);
-        captureThread.setPriority(Thread.MAX_PRIORITY);
         captureThread.start();
 
         // -------------------------------------------------------------
         // RENDER THREAD: Smooth FastProportion COVER Display Loop
         // -------------------------------------------------------------
-        new Thread(() -> {
+        Thread renderThread = new Thread(() -> {
             long lastFpsTime = System.nanoTime();
             int frameCount = 0;
 
             while (running) {
-                // If a fresh capture frame is ready, update display image
+                // If a fresh capture frame is ready, lock and copy to displayPixels
                 if (newFrameAvailable.compareAndSet(true, false)) {
-                    int[] front = activeFrontBuffer;
-                    if (front != null) {
-                        System.arraycopy(front, 0, displayPixels, 0, displayPixels.length);
+                    int readyIdx = latestReadyIndex;
+                    if (readyIdx >= 0) {
+                        currentRenderIndex = readyIdx;
+                        System.arraycopy(displayBuffers[readyIdx], 0, displayPixels, 0, displayPixels.length);
                     }
                 }
 
@@ -280,10 +277,12 @@ public class Demo extends Canvas {
                     updateTitleBar();
                 }
 
-                // Smooth frame pacing (~200 FPS cap)
-                Thread.yield();
+                // Smooth frame pacing (~250 FPS ceiling, prevent runaway busy-loops)
+                java.util.concurrent.locks.LockSupport.parkNanos(4_000_000L);
             }
-        }, "FastScreen-Render-Loop").start();
+        }, "FastScreen-Render-Loop");
+        renderThread.setDaemon(true);
+        renderThread.start();
     }
 
     private static BufferedImage createRoundIcon() {

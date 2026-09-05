@@ -110,6 +110,50 @@ JNIEXPORT jboolean JNICALL Java_fastscreen_FastScreen_nativeStartStream(
 }
 
 /**
+ * @brief Poll if a new frame is available without allocating an int array
+ */
+JNIEXPORT jboolean JNICALL Java_fastscreen_FastScreen_nativePollNewFrame(
+    JNIEnv* env, jobject obj, jlong handle) {
+    if (!handle) return JNI_FALSE;
+    void* capture = (void*)handle;
+
+    int* pixels = nullptr;
+    int width = 0;
+    int height = 0;
+
+    if (!dxgiCaptureFrame(capture, &pixels, &width, &height)) {
+        return JNI_FALSE;
+    }
+    return JNI_TRUE;
+}
+
+/**
+ * @brief Copy next frame into pre-allocated user array (0 GC allocations)
+ */
+JNIEXPORT jboolean JNICALL Java_fastscreen_FastScreen_nativeGetNextFrameInto(
+    JNIEnv* env, jobject obj, jlong handle, jintArray destArray) {
+    if (!handle || !destArray) return JNI_FALSE;
+    void* capture = (void*)handle;
+
+    int* pixels = nullptr;
+    int width = 0;
+    int height = 0;
+
+    if (!dxgiCaptureFrame(capture, &pixels, &width, &height)) {
+        return JNI_FALSE;
+    }
+
+    jsize len = env->GetArrayLength(destArray);
+    int total = width * height;
+    if (len < total) {
+        return JNI_FALSE;
+    }
+
+    env->SetIntArrayRegion(destArray, 0, total, (jint*)pixels);
+    return JNI_TRUE;
+}
+
+/**
  * @brief Get next frame from streaming capture (int array)
  */
 JNIEXPORT jintArray JNICALL Java_fastscreen_FastScreen_nativeGetNextFrame(
@@ -252,16 +296,16 @@ JNIEXPORT jboolean JNICALL Java_fastscreen_FastScreen_nativeSetWindowExcluded(
     return res ? JNI_TRUE : JNI_FALSE;
 }
 
-struct FastScreenEnumData {
-    const char* targetTitle;
+struct FastScreenEnumDataW {
+    const wchar_t* targetTitle;
     HWND foundHwnd;
 };
 
-static BOOL CALLBACK FastScreenEnumWindowsProc(HWND hwnd, LPARAM lParam) {
-    FastScreenEnumData* data = (FastScreenEnumData*)lParam;
-    char title[512];
-    if (GetWindowTextA(hwnd, title, sizeof(title)) > 0) {
-        if (strstr(title, data->targetTitle) != nullptr) {
+static BOOL CALLBACK FastScreenEnumWindowsProcW(HWND hwnd, LPARAM lParam) {
+    FastScreenEnumDataW* data = (FastScreenEnumDataW*)lParam;
+    wchar_t title[512];
+    if (GetWindowTextW(hwnd, title, sizeof(title)/sizeof(wchar_t)) > 0) {
+        if (wcsstr(title, data->targetTitle) != nullptr) {
             data->foundHwnd = hwnd;
             return FALSE; // stop search
         }
@@ -270,25 +314,26 @@ static BOOL CALLBACK FastScreenEnumWindowsProc(HWND hwnd, LPARAM lParam) {
 }
 
 /**
- * @brief Exclude or include window from capture by window title
+ * @brief Exclude or include window from capture by window title (Unicode safe)
  */
 JNIEXPORT jboolean JNICALL Java_fastscreen_FastScreen_nativeSetWindowExcludedByTitle(
     JNIEnv* env, jclass cls, jstring title, jboolean exclude) {
     if (!title) {
         return JNI_FALSE;
     }
-    const char* str = env->GetStringUTFChars(title, nullptr);
-    if (!str) {
+    const jchar* chars = env->GetStringChars(title, nullptr);
+    if (!chars) {
         return JNI_FALSE;
     }
 
-    HWND hwnd = FindWindowA(nullptr, str);
+    const wchar_t* wstr = (const wchar_t*)chars;
+    HWND hwnd = FindWindowW(nullptr, wstr);
     if (!hwnd) {
-        FastScreenEnumData data = { str, nullptr };
-        EnumWindows(FastScreenEnumWindowsProc, (LPARAM)&data);
+        FastScreenEnumDataW data = { wstr, nullptr };
+        EnumWindows(FastScreenEnumWindowsProcW, (LPARAM)&data);
         hwnd = data.foundHwnd;
     }
-    env->ReleaseStringUTFChars(title, str);
+    env->ReleaseStringChars(title, chars);
 
     if (hwnd) {
         DWORD affinity = exclude ? WDA_EXCLUDEFROMCAPTURE : WDA_NONE;

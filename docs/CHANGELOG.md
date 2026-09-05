@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.3] - 2026-09-05
+
+### Added
+- **Multi-Instance Architecture**:
+  - Replaced all static global state in native engine with explicit instance handles (`DXGICapture*`).
+  - Thread-safe and independent concurrent capture sessions.
+- **Dynamic Region Switching**:
+  - `setRegion(int x, int y, int width, int height)` without destroying or re-allocating the D3D11 device.
+  - Corrected UV texture coordinates for hardware HLSL scaling across subregions.
+- **Zero-GC Direct Array Fill**:
+  - Added `getNextFrame(int[] destinationBuffer)` and `pollNewFrame()` allowing continuous capture with zero Java heap allocations.
+- **Access Lost Auto-Recovery**:
+  - Automatic re-initialization of DXGI output duplication on display mode or resolution changes (`DXGI_ERROR_ACCESS_LOST`).
+- **Resource Management & Hardening**:
+  - Implemented `AutoCloseable` on `FastScreen`.
+  - Upgraded native buffer pools to 64-byte alignment (`_aligned_malloc`) for AVX2/AVX-512 SIMD operations.
+  - Switched window exclusion search to wide-character Win32 APIs (`GetWindowTextW`, `FindWindowW`).
+  - Implemented decoupled lock-free Triple Buffering in `examples/Demo`.
+
+---
+
 ## [0.1.2] - 2026-09-04
 
 ### Added

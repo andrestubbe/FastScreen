@@ -232,6 +232,14 @@ private:
         dxgiAdapter->Release();
         if (FAILED(hr)) return false;
 
+        // Query new resolution in case access lost was caused by display mode change
+        DXGI_OUTPUT_DESC outputDesc;
+        hr = dxgiOutput->GetDesc(&outputDesc);
+        if (SUCCEEDED(hr)) {
+            width = outputDesc.DesktopCoordinates.right - outputDesc.DesktopCoordinates.left;
+            height = outputDesc.DesktopCoordinates.bottom - outputDesc.DesktopCoordinates.top;
+        }
+
         IDXGIOutput1* dxgiOutput1 = nullptr;
         hr = dxgiOutput->QueryInterface(__uuidof(IDXGIOutput1), (void**)&dxgiOutput1);
         dxgiOutput->Release();
@@ -244,7 +252,10 @@ private:
             return false;
         }
 
-        printf("[DXGICapture] Desktop Duplication recovered successfully!\n");
+        // Recreate staging texture with new dimensions if needed
+        createStagingTexture();
+
+        printf("[DXGICapture] Desktop Duplication recovered successfully (%dx%d)!\n", width, height);
         return true;
     }
 
@@ -365,13 +376,26 @@ public:
             return false;
         }
         
-        // Fullscreen quad
+        // Compute UV coordinates according to capture region
+        float u0 = 0.0f;
+        float v0 = 0.0f;
+        float u1 = 1.0f;
+        float v1 = 1.0f;
+
+        if (width > 0 && height > 0 && captureWidth > 0 && captureHeight > 0) {
+            u0 = (float)captureX / (float)width;
+            v0 = (float)captureY / (float)height;
+            u1 = (float)(captureX + captureWidth) / (float)width;
+            v1 = (float)(captureY + captureHeight) / (float)height;
+        }
+
+        // Fullscreen quad with region-mapped UVs
         struct Vertex { float x, y, u, v; };
         Vertex vertices[] = {
-            { -1.0f,  1.0f, 0.0f, 0.0f },  // Top-left
-            {  1.0f,  1.0f, 1.0f, 0.0f },  // Top-right
-            { -1.0f, -1.0f, 0.0f, 1.0f },  // Bottom-left
-            {  1.0f, -1.0f, 1.0f, 1.0f }   // Bottom-right
+            { -1.0f,  1.0f, u0, v0 },  // Top-left
+            {  1.0f,  1.0f, u1, v0 },  // Top-right
+            { -1.0f, -1.0f, u0, v1 },  // Bottom-left
+            {  1.0f, -1.0f, u1, v1 }   // Bottom-right
         };
         D3D11_BUFFER_DESC vbDesc = {};
         vbDesc.Usage = D3D11_USAGE_IMMUTABLE;
@@ -549,6 +573,8 @@ public:
             printf("[DXGICapture] DXGI Desktop Duplication unavailable (0x%08X). Activating Win32 GDI fallback...\n", hr);
             useGdiFallback = true;
             duplication = nullptr;
+            if (context) { context->Release(); context = nullptr; }
+            if (device) { device->Release(); device = nullptr; }
         }
         
         // Create staging texture

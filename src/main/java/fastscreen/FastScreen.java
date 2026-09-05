@@ -108,9 +108,7 @@ public class FastScreen implements AutoCloseable {
         }
         int w = lastFrameWidth > 0 ? lastFrameWidth : 1920;
         int h = lastFrameHeight > 0 ? lastFrameHeight : 1080;
-        BufferedImage image = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
-        image.setRGB(0, 0, w, h, pixels, 0, w);
-        return image;
+        return wrapPixelsToBufferedImage(pixels, w, h);
     }
 
     /**
@@ -126,9 +124,17 @@ public class FastScreen implements AutoCloseable {
         }
         int w = lastFrameWidth > 0 ? lastFrameWidth : rect.width;
         int h = lastFrameHeight > 0 ? lastFrameHeight : rect.height;
-        BufferedImage image = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
-        image.setRGB(0, 0, w, h, pixels, 0, w);
-        return image;
+        return wrapPixelsToBufferedImage(pixels, w, h);
+    }
+
+    private static BufferedImage wrapPixelsToBufferedImage(int[] pixels, int w, int h) {
+        java.awt.image.DataBufferInt buffer = new java.awt.image.DataBufferInt(pixels, pixels.length);
+        int[] masks = {0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000};
+        java.awt.image.SinglePixelPackedSampleModel sm = 
+            new java.awt.image.SinglePixelPackedSampleModel(java.awt.image.DataBuffer.TYPE_INT, w, h, masks);
+        java.awt.image.WritableRaster raster = java.awt.image.Raster.createWritableRaster(sm, buffer, null);
+        java.awt.image.ColorModel cm = java.awt.image.ColorModel.getRGBdefault();
+        return new BufferedImage(cm, raster, false, null);
     }
 
     /**
@@ -348,7 +354,7 @@ public class FastScreen implements AutoCloseable {
      *
      * @return true if new frame available
      */
-    public boolean hasNewFrame() {
+     public boolean hasNewFrame() {
         if (!streaming || nativeHandle == 0) {
             return false;
         }
@@ -362,6 +368,35 @@ public class FastScreen implements AutoCloseable {
         bufferedFrame = nativeGetNextFrame(nativeHandle);
         frameBuffered = (bufferedFrame != null);
         return frameBuffered;
+    }
+
+    /**
+     * Non-allocating frame arrival check (0 GC allocations).
+     *
+     * @return true if a new frame is ready in the native pipeline
+     */
+    public boolean pollNewFrame() {
+        if (!streaming || nativeHandle == 0) {
+            return false;
+        }
+        return nativePollNewFrame(nativeHandle);
+    }
+
+    /**
+     * ZERO-GC Heap Streaming: Copies the next frame into a user-provided int[] buffer.
+     *
+     * @param destinationBuffer pre-allocated destination array (must be >= frameWidth * frameHeight)
+     * @return true if frame was copied, false if no new frame available
+     */
+    public boolean getNextFrame(int[] destinationBuffer) {
+        if (!streaming || nativeHandle == 0 || destinationBuffer == null) {
+            return false;
+        }
+        boolean ok = nativeGetNextFrameInto(nativeHandle, destinationBuffer);
+        if (ok) {
+            recordFrameReceived();
+        }
+        return ok;
     }
 
     /**
@@ -509,6 +544,10 @@ public class FastScreen implements AutoCloseable {
     private static native int[] nativeCaptureScreen(long handle, int x, int y, int width, int height);
 
     private static native boolean nativeStartStream(long handle, int x, int y, int width, int height);
+
+    private static native boolean nativePollNewFrame(long handle);
+
+    private static native boolean nativeGetNextFrameInto(long handle, int[] destArray);
 
     private static native int[] nativeGetNextFrame(long handle);
 

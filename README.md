@@ -1,6 +1,6 @@
-# FastScreen 0.1.2 [2026-09-04] — High-Performance Native Screen Capture for Java
+# FastScreen 0.1.3 [2026-09-05] — High-Performance Native Screen Capture for Java
 
-[![Status](https://img.shields.io/badge/status-0.1.2-brightgreen.svg)](https://github.com/andrestubbe/FastScreen/releases/tag/0.1.2)
+[![Status](https://img.shields.io/badge/status-0.1.3-brightgreen.svg)](https://github.com/andrestubbe/FastScreen/releases/tag/0.1.3)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Java](https://img.shields.io/badge/Java-17+-blue.svg)](https://www.java.com)
 [![Platform](https://img.shields.io/badge/Platform-Windows%2010+-lightgrey.svg)]()
@@ -10,7 +10,7 @@
 
 **⚡ Ultra-fast native screen capture engine for Java — 240–2000 FPS zero-copy streaming via DirectX DXGI Desktop Duplication & hardware fallback.**
 
-**FastScreen** is the hardware-accelerated desktop capture and video ingestion substrate of the **FastJava** ecosystem. Powered by DirectX 11 and the DXGI 1.2+ Desktop Duplication API, FastScreen provides ultra-low latency desktop streaming (240–2000 FPS), GPU-side hardware scaling via HLSL pixel shaders, zero JVM heap allocations through native frame pooling, and native window-capture exclusion (`SetWindowDisplayAffinity`) to completely eliminate recursive screen-mirroring (Droste effect).
+**FastScreen** is the hardware-accelerated desktop capture and video ingestion substrate of the **FastJava** ecosystem. Powered by DirectX 11 and the DXGI 1.2+ Desktop Duplication API, FastScreen provides ultra-low latency desktop streaming (240–2000 FPS), GPU-side hardware scaling via HLSL pixel shaders, zero JVM heap allocations through native frame pooling, instance-level native capture handles, AutoCloseable lifecycle management, and native window-capture exclusion (`SetWindowDisplayAffinity`) to completely eliminate recursive screen-mirroring (Droste effect).
 
 [![FastScreen Showcase](docs/screenshot.png)](https://www.youtube.com/watch?v=BZsqQl7WqWk)
 

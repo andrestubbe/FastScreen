@@ -1,0 +1,24 @@
+﻿FastScreen 0.1.3: Ultra-Fast DirectX Screen Capture for Java (240–2000 FPS)
+
+⚡ FastScreen provides hardware-accelerated, zero-copy desktop duplication and screen capture for Java using DirectX 11 (DXGI 1.2+) and GPU staging pipelines.
+
+🚀 In this release (v0.1.3):
+- Multi-Instance Architecture: Replaced static globals with native instance handles for full concurrency.
+- Dynamic Region Switching: Switch capture sub-regions without destroying DirectX devices.
+- Hardware Sub-region HLSL Scaling: Scaled bilinear sampling with exact UV coordinate normalization.
+- Zero-GC Pipeline: Fill pre-allocated int[] and direct ByteBuffers with 0 JVM garbage collector pressure.
+- Win32 Window Exclusion: Exclude recording windows with SetWindowDisplayAffinity to eliminate Droste mirror recursion loops.
+- Lock-free Triple Buffering: Decoupled capture worker and rendering thread for tearing-free 240+ FPS preview.
+
+GitHub Repository:
+https://github.com/andrestubbe/FastScreen
+
+Part of the FastJava ecosystem:
+- FastScreen (DXGI Capture)
+- FastImage (SIMD Image Processing)
+- FastCamera (Media Foundation / UVC)
+- FastRobot (Low-Latency Win32 Automation)
+- FastGrab (Native Direct-to-Disk Recording)
+- FastVulkan (Compute & Acceleration)
+
+#Java #DirectX #DXGI #ScreenCapture #GameDev #HighPerformance #FastJava #ZeroCopy
