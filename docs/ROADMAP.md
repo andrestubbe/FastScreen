@@ -22,10 +22,19 @@
 
 ---
 
-## 🟢 v0.1.2: FastImage Ecosystem Interop & Live Anti-Aliasing (Current)
+## 🟢 v0.1.2: FastImage Ecosystem Interop & Live Anti-Aliasing (Completed)
 - [x] **Zero-Copy FastImage Streaming**: `getNextFrameImage()` wrapping DXGI staging memory directly.
 - [x] **Direct Region Capture to FastImage**: `captureImage(Rectangle)` bypassing BufferedImage overhead.
 - [x] **Interactive Live Anti-Aliasing**: Dynamic runtime hotkey `[A]` switching between nearest-neighbor and linear texture sampling with live telemetry.
+
+---
+
+## 🟢 v0.1.3: Multi-Instance Engine & Zero-GC Production Hardening (Current)
+- [x] **Instance Handles (No Global State)**: Replaced static globals with explicit `DXGICapture*` instance handles.
+- [x] **Zero-GC Pre-allocated Streaming**: `getNextFrame(int[] dest)` direct-filling without JVM heap allocations.
+- [x] **Dynamic Subregion UV Recalculation**: Live viewport and UV re-generation in HLSL hardware scaling pipeline.
+- [x] **Resilient DXGI Recovery**: Automatic re-initialization upon `DXGI_ERROR_ACCESS_LOST` and display changes.
+- [x] **Decoupled CAS Triple Buffering**: Lock-free state machine eliminating screen tearing.
 
 ---
 

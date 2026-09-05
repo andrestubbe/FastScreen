@@ -78,14 +78,17 @@ Initializes the DXGI duplication stream for the specified region. Returns `true`
 #### `boolean enableHardwareScaling(int outW, int outH, boolean useLinearFilter)`
 Enables GPU-side hardware downsampling using HLSL shaders. Must be called after `startStream()`.
 
-#### `boolean hasNewFrame()`
-Polls DXGI to check if the desktop surface has updated since the last frame. Non-blocking.
+#### `boolean pollNewFrame()`
+Non-allocating frame arrival check. Consumes and stages the latest frame from the DXGI pipeline. Returns `true` if a new frame was acquired.
+
+#### `boolean getNextFrame(int[] destinationBuffer)`
+**Zero-GC Heap Streaming:** Copies the next frame directly into a caller-supplied pre-allocated `int[]` array (minimum capacity: `width * height`). Returns `true` on success, or `false` if no new frame is available.
 
 #### `int[] getNextFrame()`
 Returns the latest frame pixel array. If `hasNewFrame()` buffered a frame, returns that frame. Returns `null` if no new frame was produced.
 
 #### `ByteBuffer getNextFrameDirect()`
-**Zero-Copy:** Returns a direct `ByteBuffer` pointing directly to native staging memory.
+**Zero-Copy:** Returns a direct `ByteBuffer` pointing directly to native staging memory. The buffer is transient and valid until the next frame capture or until stream disposal.
 
 #### `FastImage getNextFrameImage()`
 **Zero-Copy FastImage Bridge:** Wraps the current native staging frame memory directly into an off-heap `FastImage` instance without copying memory.
