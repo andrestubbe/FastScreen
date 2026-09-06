@@ -49,7 +49,7 @@ import java.nio.ByteBuffer;
  * }</pre>
  *
  * @author Andre Stubbe
- * @version 0.1.3
+ * @version 0.1.4
  * @since 2026-04-16
  */
 public class FastScreen implements AutoCloseable {

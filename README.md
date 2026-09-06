@@ -10,7 +10,7 @@
 
 **⚡ Ultra-fast native screen capture engine for Java — 240–2000 FPS zero-copy streaming via DirectX DXGI Desktop Duplication & hardware fallback.**
 
-**FastScreen** is the hardware-accelerated desktop capture and video ingestion substrate of the **FastJava** ecosystem. Powered by DirectX 11 and the DXGI 1.2+ Desktop Duplication API, FastScreen provides ultra-low latency desktop streaming (240–2000 FPS), GPU-side hardware scaling via HLSL pixel shaders, zero JVM heap allocations through native frame pooling, instance-level native capture handles, AutoCloseable lifecycle management, and native window-capture exclusion (`SetWindowDisplayAffinity`) to completely eliminate recursive screen-mirroring (Droste effect).
+**FastScreen** is the hardware-accelerated desktop capture and video ingestion substrate of the **FastJava** ecosystem. Powered by DirectX 11 and the DXGI 1.2+ Desktop Duplication API, FastScreen provides ultra-low latency desktop streaming (240–2000 FPS), raw uncompressed frame delivery directly into 64-byte aligned memory, zero JVM heap allocations through triple-buffered frame pooling, instance-level native capture handles, AutoCloseable lifecycle management, silent auto-recovery across Windows virtual desktop switches, and native window-capture exclusion (`SetWindowDisplayAffinity`) to completely eliminate recursive screen-mirroring (Droste effect). Image resampling, scaling, and anti-aliasing are cleanly decoupled and offloaded to **FastImage**.
 
 [![FastScreen Showcase](docs/screenshot.png)](https://www.youtube.com/watch?v=BZsqQl7WqWk)
 
@@ -39,14 +39,15 @@ public class Demo {
         // 4. Ultra-high-FPS desktop streaming (240+ FPS)
         screen.startStream(0, 0, 1920, 1080);
 
-        // Optional: Hardware-accelerated GPU scaling with bilinear filter
-        // screen.enableHardwareScaling(1280, 720, true);
-
         while (running) {
-            // ZERO-COPY: Read directly from native GPU staging memory
-            ByteBuffer directBuffer = screen.getNextFrameDirect();
-            if (directBuffer != null) {
-                // Process frame with 0 JVM garbage collection overhead
+            // ZERO-COPY: Direct native memory address for FastImage / FastPointer
+            long addr = screen.getNextFrameAddress();
+            if (addr != 0L) {
+                // Wrap and process frame with 0 JVM garbage collection overhead
+                try (FastImage frame = FastImage.wrap(addr, 1920, 1080)) {
+                    // FastImage handles SIMD Catmull-Rom Bicubic or Area-Average scaling
+                    frame.resizeAreaAverage(1280, 720);
+                }
             }
         }
 
@@ -89,8 +90,8 @@ For over two decades, Java developers needing screen capture have been constrain
 **FastScreen** eliminates all these bottlenecks by interfacing directly with the Windows GPU compositor:
 
 - **GPU Direct Duplication**: Intercepts the composited desktop texture directly from the Desktop Window Manager (DWM) using DXGI 1.2+ `IDXGIOutputDuplication`.
-- **Zero-Copy Architecture**: Provides native Direct `ByteBuffer` views into mapped GPU memory. 0 heap allocations, 0 GC pauses.
-- **Hardware HLSL Scaling**: Performs format conversion (BGRA→RGBA) and resolution downsampling entirely on GPU execution units before CPU readback.
+- **Zero-Copy Architecture**: Provides native Direct `ByteBuffer` views and 64-byte aligned raw memory addresses (`getNextFrameAddress()`). 0 heap allocations, 0 GC pauses.
+- **FastImage Ecosystem Synergy**: Directly pairs with FastImage for SIMD AVX2/OpenMP Catmull-Rom Bicubic, Area-Average, and Bilinear scaling without duplicating memory.
 - **Native Window Exclusion**: Sets Win32 `WDA_EXCLUDEFROMCAPTURE` (`0x00000011`) so DWM automatically renders what is *behind* your window directly into the capture stream.
 
 ---
@@ -100,10 +101,10 @@ For over two decades, Java developers needing screen capture have been constrain
 - ⚡ **240–2000 FPS Capture Throughput** — Direct GPU framebuffer access via DirectX 11 Desktop Duplication.
 - 🗑️ **Zero GC Pressure** — Triple-buffered native frame pooling (`POOL_SIZE = 3`) and `ByteBuffer.allocateDirect` zero-copy streams.
 - 🛡️ **Native Window Capture Exclusion** — Hide your app from capture via `FastScreen.excludeWindow(hwnd)` or `FastScreen.excludeWindow(title)`.
-- 🎮 **Hardware GPU Scaling** — Bilinear and Point filtering implemented in custom embedded HLSL vertex/pixel shaders.
-- 🔄 **Automatic Resilient Fallback** — Seamless fallback to high-speed GDI DIBSection (`CAPTUREBLT`) for headless/RDP sessions.
+- 🖼️ **Pure Zero-Copy FastImage Bridge** — Instant zero-copy wrapping into `FastImage` for multi-threaded SIMD filtering (Point, Bilinear, Bicubic, Area-Average).
+- 🔄 **Automatic Resilient Fallback & Recovery** — Silent backoff auto-recovery during virtual desktop switches (`E_ACCESSDENIED`) and GDI fallback for headless/RDP sessions.
 - 🖱️ **Multi-Monitor Support** — Capture any physical display by monitor index.
-- 📦 **Multiple Output Modes** — Direct `ByteBuffer`, raw `int[]` RGBA pixel buffer, or standard `BufferedImage`.
+- 📦 **Multiple Output Modes** — Direct `ByteBuffer`, raw `int[]` RGBA pixel buffer, `FastPointer` address, or standard `BufferedImage`.
 - 🔗 **FastCore Integration** — Unified zero-dependency native DLL loading across the FastJava ecosystem.
 
 ---
@@ -191,11 +192,12 @@ try (FastImage frame = FastImage.wrap(rawAddr, screenWidth, screenHeight)) {
 | `captureRaw(int x, int y, int w, int h)` | `int[]` | Returns raw RGBA pixel array |
 | `captureImage(Rectangle rect)` | `FastImage` | Captures sub-rectangle directly into off-heap FastImage |
 | `startStream(int x, int y, int w, int h)` | `boolean` | Starts continuous high-FPS streaming capture |
-| `enableHardwareScaling(int w, int h, boolean smooth)` | `boolean` | Configures GPU shader downsampling |
 | `pollNewFrame()` | `boolean` | Non-allocating frame check (0 GC allocations) |
 | `getNextFrame(int[] dest)` | `boolean` | **Zero-GC**: Fills pre-allocated array directly |
 | `getNextFrame()` | `int[]` | Retrieves next frame from triple-buffered pool |
 | `getNextFrameDirect()` | `ByteBuffer` | **Zero-Copy**: Returns direct native pointer (transient) |
+| `getNextFrameAddress()` | `long` | **Zero-Copy**: 64-bit physical memory address of frame |
+| `getNextFramePointer()` | `Pointer` | **Zero-Copy**: `FastPointer` handle to native frame |
 | `getNextFrameImage()` | `FastImage` | **Zero-Copy**: Wraps native frame into FastImage |
 | `stopStream()` | `void` | Stops continuous streaming |
 | `getPixelColor(int x, int y)` | `int` | Fast single-pixel RGBA lookup |
