@@ -1,24 +1,44 @@
-﻿FastScreen 0.1.3: Ultra-Fast DirectX Screen Capture for Java (240–2000 FPS)
+FastScreen 0.1.3: Ultra-Fast DirectX Screen Capture for Java (240–2000 FPS)
 
-⚡ FastScreen provides hardware-accelerated, zero-copy desktop duplication and screen capture for Java using DirectX 11 (DXGI 1.2+) and GPU staging pipelines.
+⚡ FastScreen provides hardware-accelerated, zero-copy desktop duplication and real-time screen capture for Java using DirectX 11 (DXGI 1.2+ Desktop Duplication) and native GPU render pipelines.
 
-🚀 In this release (v0.1.3):
-- Multi-Instance Architecture: Replaced static globals with native instance handles for full concurrency.
-- Dynamic Region Switching: Switch capture sub-regions without destroying DirectX devices.
-- Hardware Sub-region HLSL Scaling: Scaled bilinear sampling with exact UV coordinate normalization.
-- Zero-GC Pipeline: Fill pre-allocated int[] and direct ByteBuffers with 0 JVM garbage collector pressure.
-- Win32 Window Exclusion: Exclude recording windows with SetWindowDisplayAffinity to eliminate Droste mirror recursion loops.
-- Lock-free Triple Buffering: Decoupled capture worker and rendering thread for tearing-free 240+ FPS preview.
+In this video / demo, we showcase:
+🔥 Pure GPU Hardware Scaling directly inside DirectX 11 VRAM (0% CPU cost)
+🔥 Real-Time Anti-Aliasing comparison:
+   • GPU POINT: Fast Nearest Neighbor
+   • GPU LINEAR AA: Hardware Bilinear Filtering
+   • GPU BICUBIC AA: 16-Tap Catmull-Rom Cubic Spline Shader for razor-sharp detail
+🔥 FastPointer & FastMemory Zero-Copy Bridge:
+   • Direct 64-bit physical memory access into DirectX readback buffers
+   • Seamless interop with FastImage SIMD processing without Java heap allocations (0 Bytes GC pressure)
+   • Live toggle between Zero-Copy FastPointer and standard JNI array copies
 
-GitHub Repository:
+🚀 Full Highlights in FastScreen 0.1.3:
+- DirectX 11 HLSL Hardware Scaling: Scale 4K/1440p down to 1080p/720p on the GPU before PCIe readback, cutting bus bandwidth by up to 90%.
+- 16-Tap Bicubic Catmull-Rom Spline Shader: Custom pixel shader using 4 bilinear texture taps with subpixel offsets for ultra-crisp scaling at 500–800+ FPS.
+- FastPointer Zero-Copy Interop: Retrieve 64-byte aligned memory addresses (Pointer.of(addr)) directly into FastImage / FastMemory.
+- Win32 Window Exclusion: Prevent Droste mirror recursion loops via SetWindowDisplayAffinity (WDA_EXCLUDEFROMCAPTURE).
+- Lock-Free Triple Buffering: Decoupled capture worker and rendering loop for tearing-free, buttery-smooth previews.
+- Dynamic Sub-Region Switching: Crop sub-rectangles on-the-fly without destroying DirectX device contexts.
+- Win32 GDI DIBSection Fallback: Seamless automatic fallback when DXGI Desktop Duplication is unavailable.
+
+Controls in Visual Demo:
+• [A] - Cycle Anti-Aliasing (GPU Point → GPU Linear AA → GPU Bicubic AA)
+• [P] - Toggle Zero-Copy Bridge (FastPointer Address vs. JNI Array Copy)
+• [E] - Toggle Window Exclusion (Exclude preview window from capture)
+• [L] - Cycle FPS Limits (Uncapped, 144, 60, 30 FPS)
+• [SPACE] - Pause / Resume capture stream
+• [ESC] - Exit
+
+📦 GitHub Repository & Source:
 https://github.com/andrestubbe/FastScreen
 
-Part of the FastJava ecosystem:
-- FastScreen (DXGI Capture)
-- FastImage (SIMD Image Processing)
-- FastCamera (Media Foundation / UVC)
-- FastRobot (Low-Latency Win32 Automation)
-- FastGrab (Native Direct-to-Disk Recording)
-- FastVulkan (Compute & Acceleration)
+🌐 The FastJava Ecosystem:
+• FastScreen – DXGI Desktop Duplication & GPU Capture
+• FastImage – SIMD (AVX2/AVX-512) Image Processing & Convolutions
+• FastPointer / FastMemory – Zero-Allocation Native Address Arithmetic
+• FastGrab – Native Direct-to-Disk BMP/RAW Screen Recording
+• FastVulkan – High-Performance Vulkan Compute & Graphics Pipeline
+• FastWindow & FastUI – Modern Native Hardware-Accelerated UI
 
-#Java #DirectX #DXGI #ScreenCapture #GameDev #HighPerformance #FastJava #ZeroCopy
+#Java #DirectX #DXGI #FastJava #ZeroCopy #GameDev #ScreenCapture #Bicubic #CatmullRom #SIMD #AVX2 #HighPerformance #GPU

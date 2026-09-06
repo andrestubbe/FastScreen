@@ -72,7 +72,6 @@ cl /LD /EHsc /O2 /W3 /nologo ^
    gdi32.lib ^
    dxgi.lib ^
    d3d11.lib ^
-   d3dcompiler.lib ^
    /OUT:fastscreen.dll ^
    /MACHINE:X64
 

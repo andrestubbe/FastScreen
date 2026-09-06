@@ -150,24 +150,21 @@ JNIEXPORT jintArray JNICALL Java_fastscreen_FastScreen_nativeGetNextFrame(JNIEnv
 JNIEXPORT jobject JNICALL Java_fastscreen_FastScreen_nativeGetNextFrameDirect(JNIEnv* env, jobject obj, jlong handle);
 
 /**
+ * @brief Get next frame raw 64-bit native memory address (FastPointer zero-copy)
+ * @param env JNI environment pointer
+ * @param obj FastScreen Java object
+ * @param handle Native handle
+ * @return jlong 64-bit memory address of native pixel buffer, or 0
+ */
+JNIEXPORT jlong JNICALL Java_fastscreen_FastScreen_nativeGetNextFrameAddress(JNIEnv* env, jobject obj, jlong handle);
+
+/**
  * @brief Stop streaming capture mode
  * @param env JNI environment pointer
  * @param obj FastScreen Java object
  * @param handle Native handle
  */
 JNIEXPORT void JNICALL Java_fastscreen_FastScreen_nativeStopStream(JNIEnv* env, jobject obj, jlong handle);
-
-/**
- * @brief Configure hardware scaling for streaming
- * @param env JNI environment pointer
- * @param obj FastScreen Java object
- * @param handle Native handle
- * @param outW Output width
- * @param outH Output height
- * @param filter Filter mode (0=Point, 1=Linear)
- * @return jboolean JNI_TRUE if scaling configured
- */
-JNIEXPORT jboolean JNICALL Java_fastscreen_FastScreen_nativeSetupHardwareScaling(JNIEnv* env, jobject obj, jlong handle, jint outW, jint outH, jint filter);
 
 /** @} */
 

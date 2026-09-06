@@ -2,6 +2,15 @@
 chcp 65001 >nul
 cd /d "%~dp0"
 
+echo [FastScreen] Compiling Native C++ library...
+call compile.bat >nul 2>&1
+if %ERRORLEVEL% NEQ 0 (
+    echo [ERROR] Native C++ compilation failed.
+    call compile.bat
+    pause
+    exit /b %ERRORLEVEL%
+)
+
 echo [FastScreen] Building library...
 call mvn clean install -DskipTests -q
 if %ERRORLEVEL% NEQ 0 (

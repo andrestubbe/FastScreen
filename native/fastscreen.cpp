@@ -21,7 +21,6 @@ extern "C" {
     bool dxgiInitialize(void* capture, int monitorIndex);
     bool dxgiInitializeRegion(void* capture, int monitorIndex, int x, int y, int w, int h);
     bool dxgiSetRegion(void* capture, int x, int y, int w, int h);
-    bool dxgiSetupScaling(void* capture, int outW, int outH, int filter);
     bool dxgiCaptureFrame(void* capture, int** pixels, int* width, int* height);
     int dxgiGetWidth(void* capture);
     int dxgiGetHeight(void* capture);
@@ -198,22 +197,31 @@ JNIEXPORT jobject JNICALL Java_fastscreen_FastScreen_nativeGetNextFrameDirect(
 }
 
 /**
+ * @brief Get next frame raw 64-bit native memory address (FastPointer zero-copy)
+ */
+JNIEXPORT jlong JNICALL Java_fastscreen_FastScreen_nativeGetNextFrameAddress(
+    JNIEnv* env, jobject obj, jlong handle) {
+    
+    if (!handle) return 0;
+    void* capture = (void*)handle;
+    
+    int* pixels = nullptr;
+    int width = 0;
+    int height = 0;
+    
+    if (!dxgiCaptureFrame(capture, &pixels, &width, &height)) {
+        return 0;
+    }
+    
+    return (jlong)(intptr_t)pixels;
+}
+
+/**
  * @brief Stop streaming capture mode
  */
 JNIEXPORT void JNICALL Java_fastscreen_FastScreen_nativeStopStream(
     JNIEnv* env, jobject obj, jlong handle) {
     // Streaming state is managed on the Java side; handle remains valid until dispose
-}
-
-/**
- * @brief Configure hardware scaling for streaming
- */
-JNIEXPORT jboolean JNICALL Java_fastscreen_FastScreen_nativeSetupHardwareScaling(
-    JNIEnv* env, jobject obj, jlong handle, jint outW, jint outH, jint filter) {
-    
-    if (!handle) return JNI_FALSE;
-    bool success = dxgiSetupScaling((void*)handle, outW, outH, filter);
-    return success ? JNI_TRUE : JNI_FALSE;
 }
 
 /**

@@ -12,10 +12,7 @@ FastScreen utilizes a hybrid acceleration model targeting the Windows Desktop Wi
     *   Requires **DirectX 11.1+** on **Windows 8, 10, or 11**.
     *   Targets Direct3D Feature Level `11_0` or `10_1` with `D3D11_CREATE_DEVICE_BGRA_SUPPORT`.
     *   GPU-resident framebuffer access at 240–2000 FPS without CPU intervention.
-*   **Hardware Scaling & Color Conversion**:
-    *   Embedded HLSL Vertex Shader (`VSMain`) and Pixel Shader (`PSMain`).
-    *   Hardware texture sampling with configurable filters: `Point` (0, nearest neighbor) or `Linear` (1, bilinear interpolation).
-    *   In-shader swizzle from native desktop BGRA to standard 32-bit RGBA.
+    *   Delivers uncompressed 64-byte aligned frames for zero-copy interop with `FastImage`.
 *   **Resilient Fallback — Win32 GDI DIBSection**:
     *   Automatically activated if DXGI returns `E_ACCESSDENIED` (e.g. non-interactive sessions, headless CI, Remote Desktop, or secure desktop).
     *   Uses high-speed `CreateDIBSection` with `BitBlt(..., SRCCOPY | CAPTUREBLT)` for hardware-backed capture at 60–240 FPS.

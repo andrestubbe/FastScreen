@@ -1,10 +1,10 @@
-# FastScreen 0.1.3 [2026-09-05] — High-Performance Native Screen Capture for Java
+# FastScreen 0.1.4 [2026-09-06] — High-Performance Native Screen Capture for Java
 
-[![Status](https://img.shields.io/badge/status-0.1.3-brightgreen.svg)](https://github.com/andrestubbe/FastScreen/releases/tag/0.1.3)
+[![Status](https://img.shields.io/badge/status-0.1.4-brightgreen.svg)](https://github.com/andrestubbe/FastScreen/releases/tag/0.1.4)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Java](https://img.shields.io/badge/Java-17+-blue.svg)](https://www.java.com)
 [![Platform](https://img.shields.io/badge/Platform-Windows%2010+-lightgrey.svg)]()
-[![JitPack](https://img.shields.io/badge/JitPack-ready-green.svg)](https://jitpack.io/#andrestubbe/FastScreen)
+[![JitPack](https://img.shields.io/badge/JitPack-0.1.4-green.svg)](https://jitpack.io/#andrestubbe/FastScreen)
 
 ---
 
@@ -118,7 +118,7 @@ For over two decades, Java developers needing screen capture have been constrain
 
 ---
 
-## Architecture & Pipeline
+### Architecture & Pipeline
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -128,24 +128,42 @@ For over two decades, Java developers needing screen capture have been constrain
                       IDXGIOutputDuplication
                                ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                 Direct3D 11 Desktop Texture                 │
+│             Direct3D 11 Desktop Texture (Raw VRAM)          │
 └──────────────────────────────┬──────────────────────────────┘
                                │
-               HLSL Pixel Shader (BGRA ➔ RGBA)
-               + Hardware Scaling (Point / Linear)
+                CopyResource / SubresourceRegion
                                ▼
 ┌─────────────────────────────────────────────────────────────┐
-│           CPU-Accessible Staging Texture / Pool             │
+│       64-Byte Aligned AVX-512 CPU Frame Pool (FastScreen)   │
 └──────────────────────────────┬──────────────────────────────┘
                                │
-                    Zero-Copy Direct JNI
+                   FastPointer Zero-Copy Bridge
                                ▼
 ┌─────────────────────────────────────────────────────────────┐
-│          Java Application (Direct ByteBuffer / int[])       │
+│    FastImage: SIMD Multi-Threaded Resampling & Filtering    │
+│       (Nearest, Bilinear, Catmull-Rom Bicubic, Area-Avg)    │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 ---
+
+## 🤝 Clean Architectural Separation & FastImage Synergy
+
+In the **FastJava** ecosystem, concerns are strictly separated:
+- **FastScreen**: Ultra-lightweight, dedicated screen ingestion substrate. Captures raw native desktop frames with zero latency, zero GC heap pressure, and native window-exclusion (`SetWindowDisplayAffinity`). Exposes direct 64-byte aligned memory addresses (`getNextFrameAddress()`) and `FastPointer` wrappers.
+- **FastImage**: Dedicated native image manipulation and computer vision engine. Resamples, scales (Point, Bilinear, Bicubic Catmull-Rom, Area-Average Box), blurs, crops, and processes frames using vectorized AVX2/SSE4.1/OpenMP SIMD pipelines.
+
+```java
+// FastScreen captures the raw desktop with zero GC:
+long rawAddr = screen.getNextFrameAddress();
+
+// FastImage wraps the physical memory address instantly without copying:
+try (FastImage frame = FastImage.wrap(rawAddr, screenWidth, screenHeight)) {
+    // Ultra-fast multi-threaded AVX2/Catmull-Rom bicubic downsampling:
+    frame.resizeBicubic(targetWidth, targetHeight);
+    frame.getPixels(destinationBuffer);
+}
+```
 
 ## Performance Benchmarks
 
@@ -226,14 +244,14 @@ FastScreen is distributed via JitPack. It requires **FastCore** as the unified n
     <dependency>
         <groupId>com.github.andrestubbe</groupId>
         <artifactId>FastScreen</artifactId>
-        <version>0.1.3</version>
+        <version>0.1.4</version>
     </dependency>
 
     <!-- FastImage Native Bridge & Processing -->
     <dependency>
         <groupId>com.github.andrestubbe</groupId>
         <artifactId>FastImage</artifactId>
-        <version>0.1.2</version>
+        <version>0.1.4</version>
     </dependency>
 
     <!-- FastCore Native Loader -->
@@ -253,8 +271,8 @@ repositories {
 }
 
 dependencies {
-    implementation 'com.github.andrestubbe:FastScreen:0.1.3'
-    implementation 'com.github.andrestubbe:FastImage:0.1.2'
+    implementation 'com.github.andrestubbe:FastScreen:0.1.4'
+    implementation 'com.github.andrestubbe:FastImage:0.1.4'
     implementation 'com.github.andrestubbe:FastCore:0.1.0'
 }
 ```
@@ -263,8 +281,8 @@ dependencies {
 
 Download the latest pre-compiled JARs directly to add them to your project's classpath:
 
-1. 📦 [**FastScreen-0.1.3.jar**](https://github.com/andrestubbe/FastScreen/releases/tag/0.1.3) (The Core Library)
-2. ⚡ [**FastImage-0.1.2.jar**](https://github.com/andrestubbe/FastImage/releases/tag/0.1.2) (The SIMD Image Engine)
+1. 📦 [**FastScreen-0.1.4.jar**](https://github.com/andrestubbe/FastScreen/releases/tag/0.1.4) (The Core Library)
+2. ⚡ [**FastImage-0.1.4.jar**](https://github.com/andrestubbe/FastImage/releases/tag/0.1.4) (The SIMD Image Engine)
 3. ⚙️ [**FastCore-0.1.0.jar**](https://github.com/andrestubbe/FastCore/releases/tag/0.1.0) (The Mandatory JNI Loader)
 
 > [!IMPORTANT]

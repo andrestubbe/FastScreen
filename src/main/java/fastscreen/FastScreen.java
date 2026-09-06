@@ -24,7 +24,7 @@ import java.nio.ByteBuffer;
  *   <li>Single screenshot capture (BufferedImage, raw pixels, or zero-copy FastImage)</li>
  *   <li>High-FPS streaming mode for real-time computer vision and rendering</li>
  *   <li>Zero GC pressure with native DirectByteBuffer buffers and 64-byte aligned frame pooling</li>
- *   <li>Hardware GPU scaling (Point and Bilinear AA via embedded HLSL shaders)</li>
+ *   <li>Zero-copy FastPointer bridge to FastImage for SIMD filtering and resampling</li>
  *   <li>Native Window Capture Exclusion (Win32 display affinity)</li>
  *   <li>Multi-monitor enumeration and capture support with resilient GDI fallback</li>
  *   <li>Safe lifecycle management via {@link AutoCloseable} and instance handles</li>
@@ -245,29 +245,6 @@ public class FastScreen implements AutoCloseable {
     }
 
     /**
-     * Enables hardware-accelerated scaling for streaming.
-     * This dramatically reduces CPU load by scaling on the GPU.
-     * Must be called AFTER startStream().
-     *
-     * @param outputWidth     Target width (e.g., 640)
-     * @param outputHeight    Target height (e.g., 480)
-     * @param useLinearFilter true for smooth (Linear), false for pixelated (Point)
-     * @return true if hardware scaling was enabled
-     */
-    public boolean enableHardwareScaling(int outputWidth, int outputHeight, boolean useLinearFilter) {
-        if (!streaming || nativeHandle == 0) {
-            throw new IllegalStateException("Must call startStream() before enableHardwareScaling()");
-        }
-        int filter = useLinearFilter ? 1 : 0;
-        boolean success = nativeSetupHardwareScaling(nativeHandle, outputWidth, outputHeight, filter);
-        if (success) {
-            this.frameWidth = outputWidth;
-            this.frameHeight = outputHeight;
-        }
-        return success;
-    }
-
-    /**
      * Excludes a window from screen capture by its HWND handle.
      *
      * @param hwnd Win32 HWND window handle
@@ -478,11 +455,38 @@ public class FastScreen implements AutoCloseable {
      * @return FastImage wrapping the native GPU frame, or null if no new frame
      */
     public FastImage getNextFrameImage() {
-        ByteBuffer buf = getNextFrameDirect();
-        if (buf == null) {
+        long address = getNextFrameAddress();
+        if (address == 0L) {
             return null;
         }
-        return FastImage.wrap(buf, frameWidth, frameHeight);
+        return FastImage.wrap(address, frameWidth, frameHeight);
+    }
+
+    /**
+     * ZERO-COPY Native Address: Gets the 64-bit physical memory address of the next frame.
+     * Allows direct zero-overhead SIMD / Pointer operations with FastPointer or FastMemory.
+     *
+     * @return 64-bit primitive memory address of the native frame, or 0 if no new frame
+     */
+    public long getNextFrameAddress() {
+        if (!streaming || nativeHandle == 0) {
+            return 0L;
+        }
+        long addr = nativeGetNextFrameAddress(nativeHandle);
+        if (addr != 0L) {
+            recordFrameReceived();
+        }
+        return addr;
+    }
+
+    /**
+     * ZERO-COPY FastPointer: Wraps the next frame directly in a Pointer.
+     *
+     * @return Pointer to native frame buffer, or null if no new frame
+     */
+    public fastpointer.Pointer getNextFramePointer() {
+        long addr = getNextFrameAddress();
+        return (addr != 0L) ? fastpointer.Pointer.of(addr) : null;
     }
 
     /**
@@ -566,9 +570,9 @@ public class FastScreen implements AutoCloseable {
 
     private static native ByteBuffer nativeGetNextFrameDirect(long handle);
 
-    private static native void nativeStopStream(long handle);
+    private static native long nativeGetNextFrameAddress(long handle);
 
-    private static native boolean nativeSetupHardwareScaling(long handle, int outW, int outH, int filter);
+    private static native void nativeStopStream(long handle);
 
     private static native int nativeGetPixelColor(long handle, int x, int y);
 

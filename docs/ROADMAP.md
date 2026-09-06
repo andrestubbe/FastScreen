@@ -29,12 +29,20 @@
 
 ---
 
-## 🟢 v0.1.3: Multi-Instance Engine & Zero-GC Production Hardening (Current)
+## 🟢 v0.1.3: Multi-Instance Engine & Zero-GC Production Hardening (Completed)
 - [x] **Instance Handles (No Global State)**: Replaced static globals with explicit `DXGICapture*` instance handles.
 - [x] **Zero-GC Pre-allocated Streaming**: `getNextFrame(int[] dest)` direct-filling without JVM heap allocations.
 - [x] **Dynamic Subregion UV Recalculation**: Live viewport and UV re-generation in HLSL hardware scaling pipeline.
 - [x] **Resilient DXGI Recovery**: Automatic re-initialization upon `DXGI_ERROR_ACCESS_LOST` and display changes.
 - [x] **Decoupled CAS Triple Buffering**: Lock-free state machine eliminating screen tearing.
+
+---
+
+## 🟢 v0.1.4: Pure Capture Substrate & FastDWM Integration (Current)
+- [x] **Clean Architectural Separation**: Stripped D3D11 hardware scaling/shaders from FastScreen; standardized on raw zero-copy `FastPointer` delivery.
+- [x] **FastImage Resampling Suite**: Full ecosystem offloading of nearest, bilinear, bicubic Catmull-Rom, and area-average anti-aliasing to FastImage.
+- [x] **Desktop Switch & Lock Resilience**: Silent backoff throttling (250 ms) on `DXGI_ERROR_ACCESS_LOST` / `0x80070005` (`E_ACCESSDENIED`).
+- [x] **FastDWM Synchronization**: `waitForVSync()` and microsecond timer resolution in showcase demo for true 120 FPS frame timing.
 
 ---
 

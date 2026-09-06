@@ -5,6 +5,19 @@ All notable changes to **FastScreen** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.4] - 2026-09-06
+
+### Changed & Improved
+- **Clean Architectural Separation**:
+  - Completely removed D3D11 hardware scaling, vertex buffers, and HLSL pixel shaders from FastScreen core.
+  - Dedicated FastScreen purely to high-throughput zero-copy frame capture exposing 64-byte aligned `getNextFrameAddress()` and `FastPointer` handles.
+  - Offloaded all image resampling and filtering (Point, Bilinear, Catmull-Rom Bicubic, Area-Average) to `FastImage`.
+- **Virtual Desktop & Lock Screen Resilience**:
+  - Implemented graceful recovery and 250 ms backoff polling on `DXGI_ERROR_ACCESS_LOST` and `0x80070005` (`E_ACCESSDENIED`).
+  - Completely eliminated console spam and CPU looping when switching virtual desktops, triggering UAC, or locking Windows.
+- **FastDWM VSync Integration in Visual Demo**:
+  - Integrated `FastDWM.waitForVSync()` and `FastDWM.beginTimerPeriod(1)` to eliminate micro-stuttering and achieve silky-smooth 120 FPS rendering on 120 Hz displays.
+
 ---
 
 ## [0.1.3] - 2026-09-05

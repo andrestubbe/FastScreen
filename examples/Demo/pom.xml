@@ -7,7 +7,7 @@
 
     <groupId>com.github.andrestubbe</groupId>
     <artifactId>fastscreen-demo</artifactId>
-    <version>0.1.3</version>
+    <version>0.1.4</version>
     <packaging>jar</packaging>
 
     <name>FastScreen Demo</name>
@@ -31,7 +31,7 @@
         <dependency>
             <groupId>com.github.andrestubbe</groupId>
             <artifactId>FastScreen</artifactId>
-            <version>0.1.3</version>
+            <version>0.1.4</version>
         </dependency>
         <dependency>
             <groupId>com.github.andrestubbe</groupId>
@@ -51,7 +51,12 @@
         <dependency>
             <groupId>com.github.andrestubbe</groupId>
             <artifactId>FastImage</artifactId>
-            <version>0.1.3</version>
+            <version>0.1.4</version>
+        </dependency>
+        <dependency>
+            <groupId>com.github.andrestubbe</groupId>
+            <artifactId>FastDWM</artifactId>
+            <version>0.1.0</version>
         </dependency>
     </dependencies>
 
