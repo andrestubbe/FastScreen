@@ -1,44 +1,41 @@
-FastScreen 0.1.3: Ultra-Fast DirectX Screen Capture for Java (240–2000 FPS)
+FastScreen 0.1.4: Ultra-Fast DirectX Screen Capture for Java (240–2000 FPS)
 
-⚡ FastScreen provides hardware-accelerated, zero-copy desktop duplication and real-time screen capture for Java using DirectX 11 (DXGI 1.2+ Desktop Duplication) and native GPU render pipelines.
+⚡ FastScreen provides hardware-accelerated, zero-copy desktop duplication and real-time screen capture for Java using DirectX 11 (DXGI 1.2+ Desktop Duplication) and native memory streaming.
 
 In this video / demo, we showcase:
-🔥 Pure GPU Hardware Scaling directly inside DirectX 11 VRAM (0% CPU cost)
-🔥 Real-Time Anti-Aliasing comparison:
-   • GPU POINT: Fast Nearest Neighbor
-   • GPU LINEAR AA: Hardware Bilinear Filtering
-   • GPU BICUBIC AA: 16-Tap Catmull-Rom Cubic Spline Shader for razor-sharp detail
-🔥 FastPointer & FastMemory Zero-Copy Bridge:
-   • Direct 64-bit physical memory access into DirectX readback buffers
-   • Seamless interop with FastImage SIMD processing without Java heap allocations (0 Bytes GC pressure)
-   • Live toggle between Zero-Copy FastPointer and standard JNI array copies
+🔥 Pure Zero-Copy Desktop Capture directly to 64-byte aligned memory (0% GPU scaling overhead in FastScreen core)
+🔥 Seamless FastImage 0.1.4 Pipeline Integration:
+   • POINT: Ultra-fast Nearest-Neighbor resampling
+   • LINEAR: AVX2 SIMD Bilinear interpolation
+   • BICUBIC: High-precision Catmull-Rom cubic spline anti-aliasing
+   • AREA-AVERAGE: OpenMP multi-threaded box downsampling for perfect moiré elimination
+🔥 Silky-Smooth 120 FPS Synchronization via FastDWM (waitForVSync + 1ms timer period)
+🔥 Win32 Window Exclusion: Prevent recursive Droste mirror loops via SetWindowDisplayAffinity (WDA_EXCLUDEFROMCAPTURE)
+🔥 Virtual Desktop & Lock-Screen Resilience: Automatic silent backoff recovery on DXGI_ERROR_ACCESS_LOST / 0x80070005
 
-🚀 Full Highlights in FastScreen 0.1.3:
-- DirectX 11 HLSL Hardware Scaling: Scale 4K/1440p down to 1080p/720p on the GPU before PCIe readback, cutting bus bandwidth by up to 90%.
-- 16-Tap Bicubic Catmull-Rom Spline Shader: Custom pixel shader using 4 bilinear texture taps with subpixel offsets for ultra-crisp scaling at 500–800+ FPS.
-- FastPointer Zero-Copy Interop: Retrieve 64-byte aligned memory addresses (Pointer.of(addr)) directly into FastImage / FastMemory.
-- Win32 Window Exclusion: Prevent Droste mirror recursion loops via SetWindowDisplayAffinity (WDA_EXCLUDEFROMCAPTURE).
-- Lock-Free Triple Buffering: Decoupled capture worker and rendering loop for tearing-free, buttery-smooth previews.
-- Dynamic Sub-Region Switching: Crop sub-rectangles on-the-fly without destroying DirectX device contexts.
-- Win32 GDI DIBSection Fallback: Seamless automatic fallback when DXGI Desktop Duplication is unavailable.
+🚀 Highlights in FastScreen 0.1.4:
+- Clean Architectural Separation: FastScreen dedicated purely to native screen capture; all image resampling and filtering offloaded to FastImage.
+- FastDWM Frame Pacing: Eliminates micro-stuttering on high-refresh (120 Hz / 144 Hz / 240 Hz) displays.
+- Zero Java Heap Allocations: Triple-buffered native frame pool exposing raw FastPointer addresses.
+- Auto-Recovery: Seamlessly recovers capture session when switching virtual desktops, triggering UAC, or locking Windows.
 
 Controls in Visual Demo:
-• [A] - Cycle Anti-Aliasing (GPU Point → GPU Linear AA → GPU Bicubic AA)
-• [P] - Toggle Zero-Copy Bridge (FastPointer Address vs. JNI Array Copy)
+• [A] - Cycle Anti-Aliasing (Point → Bilinear → Bicubic → Area-Average)
 • [E] - Toggle Window Exclusion (Exclude preview window from capture)
-• [L] - Cycle FPS Limits (Uncapped, 144, 60, 30 FPS)
-• [SPACE] - Pause / Resume capture stream
 • [ESC] - Exit
 
-📦 GitHub Repository & Source:
-https://github.com/andrestubbe/FastScreen
+📦 GitHub Repositories:
+• FastScreen: https://github.com/andrestubbe/FastScreen
+• FastImage: https://github.com/andrestubbe/FastImage
+• FastDWM: https://github.com/andrestubbe/FastDWM
 
 🌐 The FastJava Ecosystem:
-• FastScreen – DXGI Desktop Duplication & GPU Capture
+• FastScreen – DXGI Desktop Duplication & Zero-Copy Ingestion
 • FastImage – SIMD (AVX2/AVX-512) Image Processing & Convolutions
+• FastDWM – High-Precision DWM VSync Pacing & Composition
 • FastPointer / FastMemory – Zero-Allocation Native Address Arithmetic
-• FastGrab – Native Direct-to-Disk BMP/RAW Screen Recording
+• FastScreenCapture / FastGrab – Native Direct-to-Disk BMP/RAW Screen Recording
 • FastVulkan – High-Performance Vulkan Compute & Graphics Pipeline
 • FastWindow & FastUI – Modern Native Hardware-Accelerated UI
 
-#Java #DirectX #DXGI #FastJava #ZeroCopy #GameDev #ScreenCapture #Bicubic #CatmullRom #SIMD #AVX2 #HighPerformance #GPU
+#Java #DirectX #DXGI #FastJava #ZeroCopy #GameDev #ScreenCapture #FastDWM #FastImage #Bicubic #SIMD #AVX2 #HighPerformance
