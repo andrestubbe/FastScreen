@@ -5,6 +5,20 @@ All notable changes to **FastScreen** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.5] - 2026-09-19
+
+### Added
+- **Built-in D3D11 GPU Hardware Scaling**:
+  - `startStream(int x, int y, int width, int height, int scaleWidth, int scaleHeight)`: Captures the full source region and blits it through a Direct3D 11 fullscreen-quad shader (bilinear `D3D11_FILTER_MIN_MAG_MIP_LINEAR`) to a `scaleWidth×scaleHeight` RenderTarget before CPU readback.
+  - `setScale(int scaleWidth, int scaleHeight)`: Dynamically changes the GPU scale target on a live stream. Pass `0, 0` to revert to full-resolution readback.
+  - Eliminates the major bottleneck on high-DPI displays: 2880×1920 → 1920×1080 costs **~2 ms** staging readback instead of **~36 ms**, raising achievable FPS from ~26 to 60+ on Intel Iris Xe / 3K Surface.
+- **New C API**: `dxgiSetScale(void* capture, int scaleW, int scaleH)` exported from `DXGICapture.cpp`.
+- **New JNI functions**: `nativeStartStreamScaled()`, `nativeSetScale()` in `fastscreen.cpp`.
+- **Runtime HLSL Compilation**: Vertex and pixel shaders compiled at DLL load via `D3DCompile` — no external `.cso` files needed. Shader model `vs_5_0` / `ps_5_0`, fullscreen triangle trick (3 vertices, no vertex buffer).
+- **compile.bat**: Added `d3dcompiler.lib` to linker.
+
+---
+
 ## [0.1.4] - 2026-09-06
 
 ### Changed & Improved

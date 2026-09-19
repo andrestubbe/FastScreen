@@ -38,11 +38,19 @@
 
 ---
 
-## 🟢 v0.1.4: Pure Capture Substrate & FastDWM Integration (Current)
+## 🟢 v0.1.4: Pure Capture Substrate & FastDWM Integration (Completed)
 - [x] **Clean Architectural Separation**: Stripped D3D11 hardware scaling/shaders from FastScreen; standardized on raw zero-copy `FastPointer` delivery.
 - [x] **FastImage Resampling Suite**: Full ecosystem offloading of nearest, bilinear, bicubic Catmull-Rom, and area-average anti-aliasing to FastImage.
 - [x] **Desktop Switch & Lock Resilience**: Silent backoff throttling (250 ms) on `DXGI_ERROR_ACCESS_LOST` / `0x80070005` (`E_ACCESSDENIED`).
 - [x] **FastDWM Synchronization**: `waitForVSync()` and microsecond timer resolution in showcase demo for true 120 FPS frame timing.
+
+---
+
+## 🟢 v0.1.5: Built-in GPU Hardware Scaling (Completed)
+- [x] **D3D11 Fullscreen-Quad GPU Blit**: `startStream(x,y,w,h,scaleW,scaleH)` — bilinear scale on GPU before CPU readback.
+- [x] **Runtime HLSL Compilation**: VS+PS shaders compiled via `D3DCompile` at startup — no external `.cso` shader files required.
+- [x] **`setScale()` Live Switching**: Dynamically change or disable GPU scaling on a live capture stream.
+- [x] **3K→1080p Performance**: Intel Iris Xe Surface: ~2 ms staging readback vs. ~36 ms full-resolution — 60+ FPS realtime streaming on 3K displays.
 
 ---
 

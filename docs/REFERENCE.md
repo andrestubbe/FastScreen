@@ -72,8 +72,11 @@ Captures raw 32-bit packed RGBA pixels `(A << 24 | R << 16 | G << 8 | B)`. Zero 
 #### `boolean startStream(int x, int y, int width, int height)`
 Initializes the DXGI duplication stream for the specified region. Returns `true` if successfully started.
 
-#### `boolean enableHardwareScaling(int outW, int outH, boolean useLinearFilter)`
-Enables GPU-side hardware downsampling using HLSL shaders. Must be called after `startStream()`.
+#### `boolean startStream(int x, int y, int width, int height, int scaleWidth, int scaleHeight)` *(v0.1.5)*
+Starts streaming with **GPU hardware scaling**. The source region is captured and scaled on the GPU (bilinear `D3D11_FILTER_MIN_MAG_MIP_LINEAR`) to `scaleWidth × scaleHeight` via a Direct3D 11 fullscreen-quad blit before CPU readback. Staging texture is sized to output dimensions only — e.g. 2880×1920 → 1920×1080 reduces readback from 22 MB to 8 MB. Pass `scaleWidth=0, scaleHeight=0` for no scaling.
+
+#### `boolean setScale(int scaleWidth, int scaleHeight)` *(v0.1.5)*
+Dynamically changes the GPU scale target on a running stream. Safe to call mid-stream. Pass `0, 0` to revert to full-resolution readback.
 
 #### `boolean pollNewFrame()`
 Non-allocating frame arrival check. Consumes and stages the latest frame from the DXGI pipeline. Returns `true` if a new frame was acquired.

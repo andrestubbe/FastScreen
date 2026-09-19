@@ -1,16 +1,16 @@
-# FastScreen 0.1.4 [2026-09-06] — High-Performance Native Screen Capture for Java
+# FastScreen 0.1.5 [2026-09-19] — High-Performance Native Screen Capture for Java
 
-[![Status](https://img.shields.io/badge/status-0.1.4-brightgreen.svg)](https://github.com/andrestubbe/FastScreen/releases/tag/0.1.4)
+[![Status](https://img.shields.io/badge/status-0.1.5-brightgreen.svg)](https://github.com/andrestubbe/FastScreen/releases/tag/0.1.5)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Java](https://img.shields.io/badge/Java-17+-blue.svg)](https://www.java.com)
 [![Platform](https://img.shields.io/badge/Platform-Windows%2010+-lightgrey.svg)]()
-[![JitPack](https://img.shields.io/badge/JitPack-0.1.4-green.svg)](https://jitpack.io/#andrestubbe/FastScreen)
+[![JitPack](https://img.shields.io/badge/JitPack-0.1.5-green.svg)](https://jitpack.io/#andrestubbe/FastScreen)
 
 ---
 
 **⚡ Ultra-fast native screen capture engine for Java — 240–2000 FPS zero-copy streaming via DirectX DXGI Desktop Duplication & hardware fallback.**
 
-**FastScreen** is the hardware-accelerated desktop capture and video ingestion substrate of the **FastJava** ecosystem. Powered by DirectX 11 and the DXGI 1.2+ Desktop Duplication API, FastScreen provides ultra-low latency desktop streaming (240–2000 FPS), raw uncompressed frame delivery directly into 64-byte aligned memory, zero JVM heap allocations through triple-buffered frame pooling, instance-level native capture handles, AutoCloseable lifecycle management, silent auto-recovery across Windows virtual desktop switches, and native window-capture exclusion (`SetWindowDisplayAffinity`) to completely eliminate recursive screen-mirroring (Droste effect). Image resampling, scaling, and anti-aliasing are cleanly decoupled and offloaded to **FastImage**.
+**FastScreen** is the hardware-accelerated desktop capture and video ingestion substrate of the **FastJava** ecosystem. Powered by DirectX 11 and the DXGI 1.2+ Desktop Duplication API, FastScreen provides ultra-low latency desktop streaming (240–2000 FPS), raw uncompressed frame delivery directly into 64-byte aligned memory, zero JVM heap allocations through triple-buffered frame pooling, instance-level native capture handles, AutoCloseable lifecycle management, silent auto-recovery across Windows virtual desktop switches, and native window-capture exclusion (`SetWindowDisplayAffinity`) to completely eliminate recursive screen-mirroring (Droste effect). Starting with v0.1.5, FastScreen also ships a built-in D3D11 GPU bilinear scaling path: capture the full desktop and deliver it pre-scaled to any target resolution — only ~2 ms of GPU readback instead of ~36 ms on 3K displays. Image resampling, scaling, and anti-aliasing are cleanly decoupled and offloaded to **FastImage**.
 
 Watch Demo (YouTube) | Watch JMH Benchmark (YouTube)
 
@@ -117,6 +117,7 @@ For over two decades, Java developers needing screen capture have been constrain
 - 🖱️ **Multi-Monitor Support** — Capture any physical display by monitor index.
 - 📦 **Multiple Output Modes** — Direct `ByteBuffer`, raw `int[]` RGBA pixel buffer, `FastPointer` address, or standard `BufferedImage`.
 - 🔗 **FastCore Integration** — Unified zero-dependency native DLL loading across the FastJava ecosystem.
+- 🚀 **Built-in GPU Hardware Scaling (v0.1.5)** — `startStream(x,y,w,h,scaleW,scaleH)` blits the full desktop through a D3D11 fullscreen-quad shader to a `scaleW×scaleH` RenderTarget before CPU readback — eliminates the 3K→1080p bottleneck (2 ms instead of 36 ms).
 
 ---
 
@@ -140,10 +141,18 @@ For over two decades, Java developers needing screen capture have been constrain
                       IDXGIOutputDuplication
                                ▼
 ┌─────────────────────────────────────────────────────────────┐
-│             Direct3D 11 Desktop Texture (Raw VRAM)          │
+│         Direct3D 11 Desktop Texture (Full VRAM)             │
 └──────────────────────────────┬──────────────────────────────┘
                                │
-                CopyResource / SubresourceRegion
+              ┌────────────────┴───────────────────┐
+         GPU Scale Path (v0.1.5)              CPU Copy Path
+    desktopCopy SRV → fullscreen         CopySubresource /
+    triangle blit (bilinear D3D11)       CopyResource
+    → scaledTexture RenderTarget
+              │
+     tiny stagingTexture
+     (scaleW×scaleH, ~2 ms)
+              └────────────────┬───────────────────┘
                                ▼
 ┌─────────────────────────────────────────────────────────────┐
 │       64-Byte Aligned AVX-512 CPU Frame Pool (FastScreen)   │
@@ -203,6 +212,8 @@ try (FastImage frame = FastImage.wrap(rawAddr, screenWidth, screenHeight)) {
 | `captureRaw(int x, int y, int w, int h)` | `int[]` | Returns raw RGBA pixel array |
 | `captureImage(Rectangle rect)` | `FastImage` | Captures sub-rectangle directly into off-heap FastImage |
 | `startStream(int x, int y, int w, int h)` | `boolean` | Starts continuous high-FPS streaming capture |
+| `startStream(int x, int y, int w, int h, int scaleW, int scaleH)` | `boolean` | **GPU Scaling (v0.1.5)**: Captures region, bilinear-scales to `scaleW×scaleH` via D3D11 blit before CPU readback |
+| `setScale(int scaleW, int scaleH)` | `boolean` | **GPU Scaling (v0.1.5)**: Dynamically changes scale target on running stream (0,0 = disable) |
 | `pollNewFrame()` | `boolean` | Non-allocating frame check (0 GC allocations) |
 | `getNextFrame(int[] dest)` | `boolean` | **Zero-GC**: Fills pre-allocated array directly |
 | `getNextFrame()` | `int[]` | Retrieves next frame from triple-buffered pool |
@@ -257,7 +268,7 @@ FastScreen is distributed via JitPack. It requires **FastCore** as the unified n
     <dependency>
         <groupId>com.github.andrestubbe</groupId>
         <artifactId>FastScreen</artifactId>
-        <version>0.1.4</version>
+        <version>0.1.5</version>
     </dependency>
 
     <!-- FastImage Native Bridge & Processing -->
@@ -284,7 +295,7 @@ repositories {
 }
 
 dependencies {
-    implementation 'com.github.andrestubbe:FastScreen:0.1.4'
+    implementation 'com.github.andrestubbe:FastScreen:0.1.5'
     implementation 'com.github.andrestubbe:FastImage:0.1.4'
     implementation 'com.github.andrestubbe:FastCore:0.1.0'
 }
@@ -294,7 +305,7 @@ dependencies {
 
 Download the latest pre-compiled JARs directly to add them to your project's classpath:
 
-1. 📦 [**FastScreen-0.1.4.jar**](https://github.com/andrestubbe/FastScreen/releases/tag/0.1.4) (The Core Library)
+1. 📦 [**FastScreen-0.1.5.jar**](https://github.com/andrestubbe/FastScreen/releases/tag/0.1.5) (The Core Library)
 2. ⚡ [**FastImage-0.1.4.jar**](https://github.com/andrestubbe/FastImage/releases/tag/0.1.4) (The SIMD Image Engine)
 3. ⚙️ [**FastCore-0.1.0.jar**](https://github.com/andrestubbe/FastCore/releases/tag/0.1.0) (The Mandatory JNI Loader)
 
