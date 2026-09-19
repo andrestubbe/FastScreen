@@ -113,6 +113,32 @@ JNIEXPORT jintArray JNICALL Java_fastscreen_FastScreen_nativeCaptureScreen(JNIEn
 JNIEXPORT jboolean JNICALL Java_fastscreen_FastScreen_nativeStartStream(JNIEnv* env, jobject obj, jlong handle, jint x, jint y, jint width, jint height);
 
 /**
+ * @brief Start streaming with GPU hardware scaling to target dimensions
+ * @param env JNI environment pointer
+ * @param obj FastScreen Java object
+ * @param handle Native handle
+ * @param x Stream region X (source)
+ * @param y Stream region Y (source)
+ * @param width  Stream region width  (source capture area)
+ * @param height Stream region height (source capture area)
+ * @param scaleW Target output width  (0 = no scaling)
+ * @param scaleH Target output height (0 = no scaling)
+ * @return jboolean JNI_TRUE if streaming started with GPU scaling
+ */
+JNIEXPORT jboolean JNICALL Java_fastscreen_FastScreen_nativeStartStreamScaled(JNIEnv* env, jobject obj, jlong handle, jint x, jint y, jint width, jint height, jint scaleW, jint scaleH);
+
+/**
+ * @brief Set GPU hardware scale dimensions on an already-streaming capture
+ * @param env JNI environment pointer
+ * @param obj FastScreen Java object
+ * @param handle Native handle
+ * @param scaleW Target output width  (0 = disable scaling)
+ * @param scaleH Target output height (0 = disable scaling)
+ * @return jboolean JNI_TRUE if scale was applied
+ */
+JNIEXPORT jboolean JNICALL Java_fastscreen_FastScreen_nativeSetScale(JNIEnv* env, jobject obj, jlong handle, jint scaleW, jint scaleH);
+
+/**
  * @brief Poll if a new frame is available without allocating an int array
  * @param env JNI environment pointer
  * @param obj FastScreen Java object

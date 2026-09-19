@@ -21,12 +21,14 @@ extern "C" {
     bool dxgiInitialize(void* capture, int monitorIndex);
     bool dxgiInitializeRegion(void* capture, int monitorIndex, int x, int y, int w, int h);
     bool dxgiSetRegion(void* capture, int x, int y, int w, int h);
+    bool dxgiSetScale(void* capture, int scaleW, int scaleH);
     bool dxgiCaptureFrame(void* capture, int** pixels, int* width, int* height);
     int dxgiGetWidth(void* capture);
     int dxgiGetHeight(void* capture);
     void dxgiDestroyCapture(void* capture);
     int dxgiQueryMonitorCount();
 }
+
 
 /**
  * @brief Initialize native capture for full screen
@@ -100,13 +102,45 @@ JNIEXPORT jintArray JNICALL Java_fastscreen_FastScreen_nativeCaptureScreen(
 JNIEXPORT jboolean JNICALL Java_fastscreen_FastScreen_nativeStartStream(
     JNIEnv* env, jobject obj, jlong handle,
     jint x, jint y, jint width, jint height) {
-    
+
     if (!handle) return JNI_FALSE;
     void* capture = (void*)handle;
-    
+
     bool ok = dxgiSetRegion(capture, x, y, width, height);
     return ok ? JNI_TRUE : JNI_FALSE;
 }
+
+/**
+ * @brief Start streaming with GPU hardware scaling to target dimensions
+ * @param scaleW  Target output width  (0 = no scaling)
+ * @param scaleH  Target output height (0 = no scaling)
+ */
+JNIEXPORT jboolean JNICALL Java_fastscreen_FastScreen_nativeStartStreamScaled(
+    JNIEnv* env, jobject obj, jlong handle,
+    jint x, jint y, jint width, jint height,
+    jint scaleW, jint scaleH) {
+
+    if (!handle) return JNI_FALSE;
+    void* capture = (void*)handle;
+
+    // Apply scale first so staging texture is rebuilt to scaleW x scaleH
+    bool ok = dxgiSetScale(capture, scaleW, scaleH);
+    if (ok) ok = dxgiSetRegion(capture, x, y, width, height);
+    return ok ? JNI_TRUE : JNI_FALSE;
+}
+
+/**
+ * @brief Set GPU hardware scale dimensions on existing stream
+ */
+JNIEXPORT jboolean JNICALL Java_fastscreen_FastScreen_nativeSetScale(
+    JNIEnv* env, jobject obj, jlong handle,
+    jint scaleW, jint scaleH) {
+
+    if (!handle) return JNI_FALSE;
+    bool ok = dxgiSetScale((void*)handle, scaleW, scaleH);
+    return ok ? JNI_TRUE : JNI_FALSE;
+}
+
 
 /**
  * @brief Poll if a new frame is available without allocating an int array

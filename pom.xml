@@ -6,8 +6,8 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>com.github.andrestubbe</groupId>
-            <artifactId>FastScreen</artifactId>
-    <version>0.1.4</version>
+    <artifactId>FastScreen</artifactId>
+    <version>0.1.5</version>
     <packaging>jar</packaging>
 
     <name>FastScreen</name>
