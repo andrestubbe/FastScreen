@@ -12,9 +12,9 @@
 
 **FastScreen** is the hardware-accelerated desktop capture and video ingestion substrate of the **FastJava** ecosystem. Powered by DirectX 11 and the DXGI 1.2+ Desktop Duplication API, FastScreen provides ultra-low latency desktop streaming (240–2000 FPS), raw uncompressed frame delivery directly into 64-byte aligned memory, zero JVM heap allocations through triple-buffered frame pooling, instance-level native capture handles, AutoCloseable lifecycle management, silent auto-recovery across Windows virtual desktop switches, and native window-capture exclusion (`SetWindowDisplayAffinity`) to completely eliminate recursive screen-mirroring (Droste effect). Starting with v0.1.5, FastScreen also ships a built-in D3D11 GPU bilinear scaling path: capture the full desktop and deliver it pre-scaled to any target resolution — only ~2 ms of GPU readback instead of ~36 ms on 3K displays. Image resampling, scaling, and anti-aliasing are cleanly decoupled and offloaded to **FastImage**.
 
-Watch Demo (YouTube) | Watch JMH Benchmark (YouTube)
+[**Watch Demo (YouTube)**](https://youtu.be/cOO2zx2OqhY) | Watch JMH Benchmark (YouTube)
 
-[![FastScreen Showcase](docs/screenshot.png)](https://www.youtube.com/watch?v=BZsqQl7WqWk)
+[![FastScreen Showcase](docs/screenshot.png)](https://youtu.be/cOO2zx2OqhY)
 
 ---
 
